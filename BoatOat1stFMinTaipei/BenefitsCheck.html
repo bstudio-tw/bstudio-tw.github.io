@@ -6,7 +6,7 @@
     <title>Benefits Check - B STUDIO PRODUCTION</title>
 <link rel="icon" href="https://t.kfs.io/organization_resource_files/40719/65789/favicon.png" type="image/png">
     <meta name="description" content="Benefits Check System by B STUDIO PRODUCTION">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=download" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
 
     <style>
         body {
@@ -29,7 +29,7 @@
             margin: 0 auto;
             background-color: #fff;
             padding: 40px 20px 20px 20px;
-            border-radius: 8px;
+            border-radius: 16px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
 
@@ -57,7 +57,7 @@
             padding: 10px;
             font-size: 1.2em;
             border: 1px solid #ccc;
-            border-radius: 4px;
+            border-radius: 8px;
             width: 80%;
             margin-bottom: 10px;
         }
@@ -80,7 +80,7 @@
             background-color: #F06022;
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 8px;
             font-size: 1.1em;
             cursor: pointer;
         }
@@ -143,7 +143,7 @@
     background-color: #F06022;
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: 8px;
     font-size: 1em;
     cursor: pointer;
     display: inline-flex;
@@ -185,32 +185,43 @@
 }
 
 
-        @media screen and (max-width: 600px) {
-            #langButton {
-                top: 10px;
-                right: 10px;
-            }
-        }
+@media screen and (max-width: 600px) {
+    #langButton {
+        top: 10px;
+        right: 10px;
+    }
 
-        @media screen and (max-width: 600px) {
-            .form-container {
-                padding: 15px;
-            }
+    .form-container {
+        padding: 15px;
+    }
 
-            button {
-                font-size: 1em;
-            }
+    button {
+        font-size: 1em;
+    }
 
-            .form-group {
-                flex-direction: column;
-            }
-        }
+    .form-group {
+        flex-direction: column;
+    }
+}
+
         .logo {
             display: block;
             margin: 20px auto;
             max-width: 200px;
             height: auto;
         }
+.remark1 {
+    text-align: center;
+    font-size: 0.8em;
+    color: #888;
+    margin: 10px 0 5px 0;
+}
+.remark2 {
+    text-align: center;
+    font-size: 0.8em;
+    color: #888;
+    margin: 5px 0 20px 0;
+}
     </style>
 </head>
 <body>
@@ -229,7 +240,7 @@
         <div class="form-group">
             <div class="input-container">
                 <label for="row" id="rowLabel">Row</label>
-                <input type="text" id="row" maxlength="2" placeholder="Enter row number" oninput="moveFocus(event, 'seatNo')" autofocus>
+                <input type="text" id="row" maxlength="2" placeholder="Enter row" oninput="moveFocus(event, 'seatNo')" autofocus>
             </div>
             <div class="input-container">
                 <label for="seatNo" id="seatLabel">Seat No.</label>
@@ -245,6 +256,8 @@
 
         <div id="result" class="result-container"></div>
     </div>
+<p id="remark1" class="remark1">*Newly purchased ticket info will be updated in the system within 24 hrs.</p>
+<p id="remark2" class="remark2">*For priority seats, please enter row ZZ.</p>
     <script>
         let currentLang = "en"; 
 
@@ -276,6 +289,8 @@ const languageMap = {
         fansignLabel: "FanSign (Poster)",
         signedposterLabel: "Pre-Signed Poster",
         photocardLabel: "Photo Card",
+        remark1: "*Newly purchased ticket info will be updated in the system within 24 hrs.",
+        remark2: "*For priority seats, please enter row ZZ.",
         placeholders: {
             row: "Enter row number",
             seatNo: "Enter seat number"
@@ -300,6 +315,8 @@ const languageMap = {
         fansignLabel: "面簽海報",
         signedposterLabel: "簽名海報",
         photocardLabel: "官方小卡",
+        remark1: "*新購票資訊將於 24 小時內更新於系統",
+        remark2: "*愛心席請輸入ZZ排",
         placeholders: {
             row: "輸入排號",
             seatNo: "輸入座位號"
@@ -337,6 +354,7 @@ function setLanguage(lang) {
 
         function moveFocus(event, nextElementId) {
             const currentElement = event.target;
+                currentElement.value = currentElement.value.toUpperCase();
             if (currentElement.value.length === 2) {
                 document.getElementById(nextElementId).focus();
             }
@@ -398,7 +416,7 @@ ${rows[i][30] ? `
     <div class="button-container" style="margin-top:0px;">
         <a href="${rows[i][30]}" download target="_blank">
             <button class="download-button">
-                <span class="material-symbols-outlined">download</span> 1
+                <span class="material-symbols-outlined">videocam</span> 1
             </button>
         </a>
     </div>
@@ -411,10 +429,10 @@ ${rows[i][28] || rows[i][29] ? `
 <div class="download-buttons">
     <div class="button-container" style="margin-top:0px;">
         ${rows[i][28] ? `<a href="${rows[i][28]}" download target="_blank"><button class="download-button">
-            <span class="material-symbols-outlined">download</span> 1
+            <span class="material-symbols-outlined">photo_camera_front</span> 1
         </button></a>` : ''}
         ${rows[i][29] ? `<a href="${rows[i][29]}" download target="_blank"><button class="download-button">
-            <span class="material-symbols-outlined">download</span> 2
+            <span class="material-symbols-outlined">photo_camera_front</span> 2
         </button></a>` : ''}
     </div>
 </div>
@@ -424,6 +442,18 @@ ${rows[i][28] || rows[i][29] ? `
                                 <p><strong>${window.soundcheckLabel || 'Sound Check'}:</strong> ${rows[i][22]}</p>
                                 <p><strong>${window.polaroidLabel || 'Polaroid'}:</strong> ${rows[i][23]}</p>
                                 <p><strong>${window.fansignLabel || 'FanSign (Poster)'}:</strong> ${rows[i][24]}</p>
+${rows[i][31] ? `
+<div class="download-buttons">
+    <div class="button-container" style="margin-top:0px;">
+        <a href="${rows[i][31]}" download target="_blank">
+            <button class="download-button">
+                <span class="material-symbols-outlined">videocam</span> 1
+            </button>
+        </a>
+    </div>
+</div>
+` : ''}
+
                                 <p><strong>${window.signedposterLabel || 'Pre-Signed Poster'}:</strong> ${rows[i][25]}</p>
                                 <p><strong>${window.photocardLabel || 'Photo Card'}:</strong> ${rows[i][26]}</p>
                             </div>
