@@ -442,14 +442,15 @@ ${rows[i][28] || rows[i][29] ? `
                                 <p><strong>${window.soundcheckLabel || 'Sound Check'}:</strong> ${rows[i][22]}</p>
                                 <p><strong>${window.polaroidLabel || 'Polaroid'}:</strong> ${rows[i][23]}</p>
                                 <p><strong>${window.fansignLabel || 'FanSign (Poster)'}:</strong> ${rows[i][24]}</p>
-${rows[i][31] ? `
+${rows[i][31] || rows[i][32] ? `
 <div class="download-buttons">
     <div class="button-container" style="margin-top:0px;">
-        <a href="${rows[i][31]}" download target="_blank">
-            <button class="download-button">
-                <span class="material-symbols-outlined">download</span> 1
-            </button>
-        </a>
+        ${rows[i][31] ? `<a href="${rows[i][31]}" download target="_blank"><button class="download-button">
+            <span class="material-symbols-outlined">download</span> 1
+        </button></a>` : ''}
+        ${rows[i][32] ? `<a href="${rows[i][32]}" download target="_blank"><button class="download-button">
+            <span class="material-symbols-outlined">download</span> 2
+        </button></a>` : ''}
     </div>
 </div>
 ` : ''}
@@ -477,6 +478,7 @@ ${rows[i][31] ? `
     </script>
 </body>
 </html>
+
 
 
 
