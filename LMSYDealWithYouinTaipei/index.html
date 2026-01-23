@@ -270,12 +270,21 @@ form.addEventListener('submit',async(e)=>{
   let lottery = '無';
   let found = false;
 
-  (data.values || []).forEach(r=>{
-    if(r[17]===selectedZone && r[18]===row && r[19]===seat){
-      found = true;
-      if(r[25]) lottery = r[25];
-    }
-  });
+(data.values || []).forEach(r=>{
+  const sheetZone = r[17] || '';
+  const sheetRow  = r[18] || '';
+  const sheetSeat = r[19] || '';
+
+  const sheetSeatNum = parseInt(sheetSeat.replace('號',''), 10);
+  const inputSeatNum = parseInt(seatNumber, 10);
+
+  const rowMatch = selectedZone === '身障區' ? true : sheetRow === row;
+
+  if(sheetZone === selectedZone && rowMatch && sheetSeatNum === inputSeatNum){
+    found = true;
+    if(r[25]) lottery = r[25];
+  }
+});
 
   let benefitsHTML = '';
   if(found){
