@@ -19,7 +19,7 @@
 
   <style>
     :root{
-      --orange:#ff8a00;
+      --orange:#F06022;
       --white:#ffffff;
       --black:#222222;
       --bg:#f5f5f5;
@@ -223,7 +223,6 @@ const RANGE = 'TICKETLIST!B15:AA';
 let selectedZone = '';
 let isDisabledZone = false;
 
-// zone select
 const zoneBtns = document.querySelectorAll('.zone-btn');
 zoneBtns.forEach(btn=>{
   btn.addEventListener('click',()=>{
@@ -247,11 +246,10 @@ zoneBtns.forEach(btn=>{
   });
 });
 
-// submit
 const form = document.getElementById('checkForm');
 form.addEventListener('submit',async(e)=>{
   e.preventDefault();
-  if(!selectedZone){alert('กรุณาเลือก區域');return;}
+  if(!selectedZone){alert('請選擇區域');return;}
 
   let row = '';
   if(!isDisabledZone){
@@ -270,15 +268,23 @@ form.addEventListener('submit',async(e)=>{
   const data = await res.json();
 
   let lottery = '無';
+  let found = false;
 
   (data.values || []).forEach(r=>{
-    if(r[17]===selectedZone && r[18]===row && r[19]===seat && r[25]){
-      lottery = r[25];
+    if(r[17]===selectedZone && r[18]===row && r[19]===seat){
+      found = true;
+      if(r[25]) lottery = r[25];
     }
   });
 
-  const benefits = getBenefits(selectedZone, lottery);
-  document.getElementById('result').innerHTML = benefits;
+  let benefitsHTML = '';
+  if(found){
+    benefitsHTML = getBenefits(selectedZone, lottery);
+  }else{
+    benefitsHTML = '<p>查無購票資料</p>';
+  }
+
+  document.getElementById('result').innerHTML = benefitsHTML;
   document.getElementById('overlay').style.display='flex';
 });
 
@@ -322,7 +328,6 @@ function getBenefits(zone, lottery){
   `;
 }
 
-// close popup
 const closeBtn = document.getElementById('closePopup');
 closeBtn.addEventListener('click',()=>{
   document.getElementById('overlay').style.display='none';
