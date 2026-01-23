@@ -1,0 +1,20 @@
+{
+  "name": "Benefits Check",
+  "short_name": "Benefits",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ff8a00",
+  "icons": [
+    {
+      "src": "https://t.kfs.io/organization_resource_files/40719/65694/bstudioicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://t.kfs.io/organization_resource_files/40719/65694/bstudioicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
