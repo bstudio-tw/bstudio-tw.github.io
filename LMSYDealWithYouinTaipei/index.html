@@ -1,1 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Benefits Check - B STUDIO PRODUCTION</title>
+  <meta name="description" content="Benefits Check System by B STUDIO PRODUCTION" />
+  <link rel="icon" href="https://t.kfs.io/organization_resource_files/40719/65789/favicon.png" />
 
+<!-- iOS -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="https://t.kfs.io/organization_resource_files/40719/65694/bstudioicon.png">
+
+<!-- Android / Chrome -->
+<meta name="theme-color" content="#ff8a00">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="https://bstudio-tw.github.io/LMSYDealWithYouinTaipei/manifest.json"> 
+
+  <style>
+    :root{
+      --orange:#ff8a00;
+      --white:#ffffff;
+      --black:#222222;
+      --bg:#f5f5f5;
+    }
+    *{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans TC",sans-serif}
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--black);
+      display:flex;
+      flex-direction:column;
+      min-height:100vh;
+    }
+    header{
+      background:var(--white);
+      padding:16px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      box-shadow:0 2px 8px rgba(0,0,0,.05);
+    }
+    header img{height:48px}
+
+    main{
+      flex:1;
+      padding:24px 16px;
+      display:flex;
+      justify-content:center;
+    }
+    .card{
+      background:var(--white);
+      width:100%;
+      max-width:520px;
+      border-radius:16px;
+      padding:24px;
+      box-shadow:0 10px 30px rgba(0,0,0,.08);
+    }
+    h1{
+      text-align:center;
+      font-size:22px;
+      margin-bottom:24px;
+      color:var(--orange);
+    }
+
+    .section{margin-bottom:20px}
+    .section label{
+      display:block;
+      margin-bottom:8px;
+      font-weight:600;
+    }
+
+    /* 區域 buttons */
+    .zones{
+      display:grid;
+      grid-template-columns:repeat(2,1fr);
+      gap:12px;
+    }
+    .zone-btn{
+      border:2px solid var(--orange);
+      border-radius:12px;
+      padding:12px 0;
+      text-align:center;
+      cursor:pointer;
+      font-weight:600;
+      background:#fff;
+      transition:.2s;
+    }
+    .zone-btn.active{
+      background:var(--orange);
+      color:#fff;
+    }
+
+    /* inputs */
+    .row{
+      display:flex;
+      gap:12px;
+    }
+    .row input{
+      width:100%;
+      padding:12px;
+      border-radius:10px;
+      border:1.5px solid #ddd;
+      font-size:16px;
+    }
+
+    .submit-btn{
+      margin-top:24px;
+      width:100%;
+      padding:14px;
+      border:none;
+      border-radius:14px;
+      background:var(--orange);
+      color:#fff;
+      font-size:18px;
+      font-weight:700;
+      cursor:pointer;
+    }
+
+    footer{
+      text-align:center;
+      padding:12px;
+      font-size:12px;
+      color:#777;
+    }
+
+    /* popup */
+    .overlay{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.5);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:10;
+    }
+    .popup{
+      background:#fff;
+      width:90%;
+      max-width:520px;
+      border-radius:16px;
+      padding:24px;
+      animation:fadeIn .25s ease;
+    }
+    .popup h2{
+      margin-top:0;
+      color:var(--orange);
+    }
+    .popup ul{
+      padding-left:18px;
+    }
+    .close-btn{
+      margin-top:20px;
+      width:100%;
+      padding:12px;
+      border:none;
+      border-radius:12px;
+      background:#eee;
+      font-size:16px;
+      cursor:pointer;
+    }
+    @keyframes fadeIn{
+      from{transform:translateY(10px);opacity:0}
+      to{transform:none;opacity:1}
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <img src="https://t.kfs.io/organization_resource_files/40719/66907/benefitscheck.png" alt="Benefits Check" />
+</header>
+
+<main>
+  <div class="card">
+    <h1>Benefits Check</h1>
+
+    <form id="checkForm">
+      <div class="section">
+        <label>區域</label>
+        <div class="zones">
+          <div class="zone-btn" data-zone="VIP區">VIP區</div>
+          <div class="zone-btn" data-zone="A區">A區</div>
+          <div class="zone-btn" data-zone="B區">B區</div>
+          <div class="zone-btn" data-zone="身障區">身障區</div>
+        </div>
+      </div>
+
+      <div class="section row">
+        <div>
+          <label>排號</label>
+          <input type="number" id="rowInput" placeholder="例如 3" required />
+        </div>
+        <div>
+          <label>座號</label>
+          <input type="number" id="seatInput" placeholder="例如 15" required />
+        </div>
+      </div>
+
+      <button class="submit-btn" type="submit">查詢</button>
+    </form>
+  </div>
+</main>
+
+<footer>
+  ⓒ 2026 B STUDIO PRODUCTION
+</footer>
+
+<div class="overlay" id="overlay">
+  <div class="popup">
+    <h2>福利結果</h2>
+    <div id="result"></div>
+    <button class="close-btn" id="closePopup">完成</button>
+  </div>
+</div>
+
+<script>
+const API_KEY = 'AIzaSyAjosDnoaD8flQs9tp1vAGzmqU1MhSnpwE';
+const SHEET_ID = '1KYqFvCykcuCOiwOlLbpMpz8LIKmvS2kNCF2gu9Um2D8';
+const RANGE = 'TICKETLIST!B15:AA';
+
+let selectedZone = '';
+let isDisabledZone = false;
+
+// zone select
+const zoneBtns = document.querySelectorAll('.zone-btn');
+zoneBtns.forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    zoneBtns.forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedZone = btn.dataset.zone;
+
+    const rowInput = document.getElementById('rowInput');
+    if(selectedZone === '身障區'){
+      rowInput.value = '';
+      rowInput.disabled = true;
+      rowInput.placeholder = '不需填寫';
+      rowInput.removeAttribute('required');
+      isDisabledZone = true;
+    }else{
+      rowInput.disabled = false;
+      rowInput.placeholder = '例如 3';
+      rowInput.setAttribute('required','required');
+      isDisabledZone = false;
+    }
+  });
+});
+
+// submit
+const form = document.getElementById('checkForm');
+form.addEventListener('submit',async(e)=>{
+  e.preventDefault();
+  if(!selectedZone){alert('กรุณาเลือก區域');return;}
+
+  let row = '';
+  if(!isDisabledZone){
+    row = document.getElementById('rowInput').value + '排';
+  }
+  const seatNumber = document.getElementById('seatInput').value;
+  let seat = '';
+  if(selectedZone === '身障區'){
+    seat = seatNumber.padStart(6,'0') + '號';
+  }else{
+    seat = seatNumber + '號';
+  }
+
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RANGE}?key=${API_KEY}`;
+  const res = await fetch(url);
+  const data = await res.json();
+
+  let lottery = '無';
+
+  (data.values || []).forEach(r=>{
+    if(r[17]===selectedZone && r[18]===row && r[19]===seat && r[25]){
+      lottery = r[25];
+    }
+  });
+
+  const benefits = getBenefits(selectedZone, lottery);
+  document.getElementById('result').innerHTML = benefits;
+  document.getElementById('overlay').style.display='flex';
+});
+
+function getBenefits(zone, lottery){
+  let poster='', card='', photo='', interact='';
+
+  if(zone==='VIP區'){
+    poster='親簽海報 + 官方海報';
+    card='小卡';
+    photo='2:1';
+    interact='HI-TOUCH';
+  }else if(zone==='A區'){
+    poster='官方海報';
+    card='小卡';
+    photo='2:4';
+    interact='HI-BYE';
+  }else if(zone==='B區'){
+    poster='官方海報';
+    card='小卡';
+    photo='2:8';
+    interact='HI-BYE';
+  }else{
+    poster='官方海報';
+    card='明信片';
+    photo='無';
+    interact='無';
+  }
+
+  return `
+    <ul>
+      <li><b>區域福利</b>
+        <ul>
+          <li>海報：${poster}</li>
+          <li>小卡：${card}</li>
+          <li>合照：${photo}</li>
+          <li>互動：${interact}</li>
+        </ul>
+      </li>
+      <li><b>抽選福利：</b>${lottery || '無'}</li>
+    </ul>
+  `;
+}
+
+// close popup
+const closeBtn = document.getElementById('closePopup');
+closeBtn.addEventListener('click',()=>{
+  document.getElementById('overlay').style.display='none';
+  form.reset();
+  selectedZone='';
+  isDisabledZone=false;
+  const rowInput = document.getElementById('rowInput');
+  rowInput.disabled=false;
+  rowInput.placeholder='例如 3';
+  rowInput.setAttribute('required','required');
+  zoneBtns.forEach(b=>b.classList.remove('active'));
+});
+</script>
+
+</body>
+</html>
