@@ -82,8 +82,65 @@
     }
 
     .topbar > * { pointer-events: auto; }
-    .titleline { min-width: 0; }
-    .album-name { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .titleline { position: relative; min-width: 0; }
+    .album-title-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      max-width: 100%;
+      min-width: 0;
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      backdrop-filter: none;
+      text-align: left;
+    }
+    .album-title-button:disabled { opacity: 1; }
+    .album-name { min-width: 0; font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .album-caret {
+      display: none;
+      width: 20px;
+      min-width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(245, 245, 245, .12);
+      place-items: center;
+    }
+    .album-caret svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+    .titleline.has-albums .album-caret { display: grid; }
+    .titleline.menu-open .album-caret svg { transform: rotate(180deg); }
+    .album-menu {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      z-index: 42;
+      display: none;
+      width: min(320px, calc(100vw - 28px));
+      max-height: min(340px, 58vh);
+      overflow: auto;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(16, 16, 16, .92);
+      box-shadow: 0 18px 54px rgba(0, 0, 0, .38);
+      backdrop-filter: blur(22px);
+      touch-action: pan-y;
+    }
+    .titleline.menu-open .album-menu { display: grid; gap: 4px; }
+    .album-menu button {
+      display: block;
+      width: 100%;
+      min-height: 38px;
+      padding: 9px 10px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      text-align: left;
+      white-space: normal;
+    }
+    .album-menu button.active { background: rgba(240, 96, 34, .22); color: #fff; }
     .counter { color: var(--muted); font-size: 12px; margin-top: 2px; }
     .actions { display: flex; gap: 8px; align-items: center; }
 
@@ -377,11 +434,14 @@
     <header class="topbar">
       <button class="icon-button" id="viewToggle" aria-label="Toggle album view"></button>
       <div class="titleline">
-        <div class="album-name" id="albumName">B STUDIO</div>
+        <button class="album-title-button" id="albumMenuToggle" aria-label="Select album" disabled>
+          <span class="album-name" id="albumName">B STUDIO</span>
+          <span class="album-caret" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+        </button>
         <div class="counter" id="counter">Loading...</div>
+        <div class="album-menu" id="albumMenu"></div>
       </div>
       <div class="actions">
-        <select id="albumSelect" aria-label="Album"></select>
         <button id="selectToggle" aria-label="Select photos"></button>
         <button class="primary" id="downloadBtn" aria-label="Download selected photos"></button>
       </div>
@@ -453,7 +513,9 @@
       counter: document.getElementById('counter'),
       caption: document.getElementById('caption'),
       copyrightText: document.querySelector('.copyright'),
-      albumSelect: document.getElementById('albumSelect'),
+      titleline: document.querySelector('.titleline'),
+      albumMenuToggle: document.getElementById('albumMenuToggle'),
+      albumMenu: document.getElementById('albumMenu'),
       viewToggle: document.getElementById('viewToggle'),
       selectToggle: document.getElementById('selectToggle'),
       downloadBtn: document.getElementById('downloadBtn'),
@@ -483,9 +545,9 @@
         return;
       }
       state.albums = state.config.albums || [];
-      renderAlbumSelect();
+      renderAlbumMenu();
       bindEvents();
-      await loadAlbum(0);
+      await loadAlbum(state.albumIndex);
     }
 
     function captureLaunchState() {
@@ -528,13 +590,16 @@
       });
     }
 
-    function renderAlbumSelect() {
-      els.albumSelect.innerHTML = state.albums.map((album, index) => `<option value="${index}">${escapeHtml(album.name)}</option>`).join('');
-      els.albumSelect.style.display = state.albums.length > 1 ? '' : 'none';
+    function renderAlbumMenu() {
+      els.albumMenu.innerHTML = state.albums.map((album, index) => `
+        <button type="button" data-album-index="${index}">${escapeHtml(album.name)}</button>
+      `).join('');
+      els.titleline.classList.toggle('has-albums', state.albums.length > 1);
+      els.albumMenuToggle.disabled = state.albums.length <= 1;
       const wanted = sessionStorage.getItem('bstudio_album');
       const startIndex = Math.max(0, state.albums.findIndex(album => album.id === wanted || album.sheetName === wanted));
       state.albumIndex = startIndex;
-      els.albumSelect.value = String(startIndex);
+      updateAlbumMenuState();
     }
 
     async function loadAlbum(index) {
@@ -651,7 +716,7 @@
       els.selectAllBtn.innerHTML = state.selected.size === total ? clearSelectionIcon_() : selectAllIcon_();
       els.selectAllBtn.setAttribute('aria-label', state.selected.size === total ? 'Clear selection' : 'Select all photos');
       els.gridView.classList.toggle('active', state.grid);
-      els.albumSelect.value = String(state.albumIndex);
+      updateAlbumMenuState();
       renderGridSelection();
       loadVisibleHd();
     }
@@ -710,7 +775,20 @@
     }
 
     function bindEvents() {
-      els.albumSelect.addEventListener('change', event => loadAlbum(Number(event.target.value)));
+      els.albumMenuToggle.addEventListener('click', event => {
+        event.stopPropagation();
+        if (state.albums.length <= 1) return;
+        els.titleline.classList.toggle('menu-open');
+      });
+      els.albumMenu.addEventListener('click', event => {
+        const button = event.target.closest('[data-album-index]');
+        if (!button) return;
+        els.titleline.classList.remove('menu-open');
+        loadAlbum(Number(button.dataset.albumIndex));
+      });
+      document.addEventListener('click', event => {
+        if (!els.titleline.contains(event.target)) els.titleline.classList.remove('menu-open');
+      });
       els.viewToggle.addEventListener('click', () => {
         state.grid = !state.grid;
         if (state.grid && state.selected.size) state.selecting = true;
@@ -1131,6 +1209,12 @@
 
     function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
     function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
+    function updateAlbumMenuState() {
+      if (!els.albumMenu) return;
+      els.albumMenu.querySelectorAll('[data-album-index]').forEach(button => {
+        button.classList.toggle('active', Number(button.dataset.albumIndex) === state.albumIndex);
+      });
+    }
     function clean(value) { return String(value || '').trim(); }
     function escapeHtml(value) { return clean(value).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
     function escapeAttr(value) { return escapeHtml(value); }
