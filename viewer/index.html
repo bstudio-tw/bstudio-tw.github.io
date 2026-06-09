@@ -461,7 +461,7 @@
   </main>
 
   <script>
-    const APP_CONFIG_URL = '';
+    const APP_CONFIG_URL = 'https://script.google.com/macros/s/AKfycbzeWg98DT87-Cal2tYvmrBtCMr0dDQU8dczin9_0-luy1PFb0VVZZfAtlpeSbNUQnlEFg/exec';
     const DEFAULT_EVENT_ID = '';
 
     const DEFAULT_CONFIG = {
@@ -534,6 +534,8 @@
     init().catch(err => {
       console.error(err);
       els.counter.textContent = 'Unable to load album';
+      els.empty.textContent = err.message || 'Unable to load album.';
+      els.empty.classList.add('active');
     });
 
     async function init() {
@@ -545,6 +547,10 @@
         return;
       }
       state.albums = state.config.albums || [];
+      if (!state.albums.length) {
+        els.empty.textContent = state.config.error || 'No active albums were found for this event.';
+        els.empty.classList.add('active');
+      }
       renderAlbumMenu();
       bindEvents();
       await loadAlbum(state.albumIndex);
@@ -585,7 +591,13 @@
       const configUrl = sessionStorage.getItem('bstudio_config') || APP_CONFIG_URL;
       const eventId = sessionStorage.getItem('bstudio_event') || DEFAULT_EVENT_ID;
       if (!configUrl) return DEFAULT_CONFIG;
-      return jsonp(configUrl + (configUrl.includes('?') ? '&' : '?') + 'action=config&event=' + encodeURIComponent(eventId || '')).catch(() => DEFAULT_CONFIG);
+      const config = await jsonp(configUrl + (configUrl.includes('?') ? '&' : '?') + 'action=config&event=' + encodeURIComponent(eventId || ''));
+      if (!config || config.ok === false) {
+        return Object.assign({}, DEFAULT_CONFIG, {
+          error: config && config.error ? config.error : 'Unable to load album config.'
+        });
+      }
+      return config;
     }
 
     function jsonp(url) {
@@ -621,6 +633,15 @@
       state.selected.clear();
       resetZoom();
       const album = state.albums[index];
+      if (!album) {
+        els.albumName.textContent = state.config.title || 'B STUDIO Photo Album';
+        els.counter.textContent = '';
+        state.photos = [];
+        renderTrack();
+        renderGrid();
+        updateChrome();
+        return;
+      }
       els.albumName.textContent = album ? album.name : state.config.title;
       els.counter.textContent = 'Loading...';
       els.empty.classList.remove('active');
