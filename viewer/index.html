@@ -530,7 +530,8 @@
     function normalizePhoto(row, index) {
       const full = clean(row[5]) || clean(row[0]);
       const caption = clean(row[1]);
-      const thumb = clean(row[2]);
+      const original = clean(row[0]);
+      const thumb = clean(row[2]) || kktixThumbUrl_(original || full);
       const sd = clean(row[3]);
       const hd = clean(row[4]);
       return {
@@ -541,6 +542,13 @@
         hd: hd || sd || thumb || full,
         full
       };
+    }
+
+    function kktixThumbUrl_(url) {
+      const value = clean(url);
+      if (!value || !/^https:\/\/assets\.kktix\.io\//i.test(value)) return '';
+      if (/_thumb\.(jpe?g|png|webp)(\?.*)?$/i.test(value)) return value;
+      return value.replace(/\.(jpe?g|png|webp)(\?.*)?$/i, '_thumb.$1$2');
     }
 
     function renderTrack() {
