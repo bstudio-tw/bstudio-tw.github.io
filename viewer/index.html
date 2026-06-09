@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Photo Album Viewer - B STUDIO PRODUCTION</title>
-  <meta name="description" content="Online Photo Album Viewer by B STUDIO PRODUCTION">
+  <meta name="description" content="Online Photo Album Viewer by B STUDIO PRODUCTIONr">
   <link rel="icon" href="https://t.kfs.io/organization_resource_files/40719/65789/favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="https://t.kfs.io/organization_resource_files/40719/65694/bstudioicon.png">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -55,6 +55,8 @@
     button[disabled] { opacity: .46; cursor: not-allowed; }
     .icon-button { width: 40px; padding: 0; }
     .icon-button svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .actions button { width: 40px; min-width: 40px; padding: 0; }
+    .actions button svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     select { padding: 0 34px 0 12px; background: rgba(245, 245, 245, .12); }
 
     .app {
@@ -185,6 +187,29 @@
       margin: 0 0 10px;
       color: var(--muted);
       font-size: 13px;
+    }
+
+    .grid-head-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .grid-head button {
+      width: 34px;
+      min-width: 34px;
+      min-height: 34px;
+      padding: 0;
+    }
+
+    .grid-head button svg {
+      width: 17px;
+      height: 17px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
 
     .grid {
@@ -341,7 +366,10 @@
     <section class="grid-view" id="gridView">
       <div class="grid-head">
         <span id="gridCount">0 photos</span>
-        <span id="selectedCount">0 selected</span>
+        <div class="grid-head-actions">
+          <span id="selectedCount"></span>
+          <button id="selectAllBtn" aria-label="Select all photos"></button>
+        </div>
       </div>
       <div class="grid" id="grid"></div>
     </section>
@@ -354,8 +382,8 @@
       </div>
       <div class="actions">
         <select id="albumSelect" aria-label="Album"></select>
-        <button id="selectToggle">Select</button>
-        <button class="primary" id="downloadBtn">Download</button>
+        <button id="selectToggle" aria-label="Select photos"></button>
+        <button class="primary" id="downloadBtn" aria-label="Download selected photos"></button>
       </div>
     </header>
 
@@ -407,6 +435,9 @@
       panX: 0,
       panY: 0,
       lastDistance: 0,
+      lastCenter: null,
+      zoomOriginX: 50,
+      zoomOriginY: 50,
       downloading: false,
       downloadAbort: null,
       downloadCanceled: false,
@@ -428,6 +459,7 @@
       grid: document.getElementById('grid'),
       gridCount: document.getElementById('gridCount'),
       selectedCount: document.getElementById('selectedCount'),
+      selectAllBtn: document.getElementById('selectAllBtn'),
       status: document.getElementById('downloadStatus'),
       statusText: document.getElementById('downloadText'),
       cancelDownloadBtn: document.getElementById('cancelDownloadBtn'),
@@ -580,20 +612,25 @@
       const total = state.photos.length;
       const photo = state.photos[state.current];
       const album = state.albums[state.albumIndex];
+      if (state.grid && state.selected.size) state.selecting = true;
       els.albumName.textContent = album ? album.name : state.config.title;
-      els.counter.textContent = state.grid ? `${total} photos` : `${Math.min(state.current + 1, total)} / ${total}`;
+      els.counter.textContent = state.grid ? '' : `${Math.min(state.current + 1, total)} / ${total}`;
       els.gridCount.textContent = `${total} photos`;
-      els.selectedCount.textContent = `${state.selected.size} selected`;
+      els.selectedCount.textContent = state.selecting ? `${state.selected.size} selected` : '';
       els.caption.textContent = state.grid ? '' : (photo && photo.caption ? photo.caption : '');
       els.copyrightText.textContent = state.grid ? '' : (state.config.copyrightText || '\u24d2 2026 B STUDIO PRODUCTION');
       els.blurBg.style.backgroundImage = photo ? `url("${cssUrl(photo.thumb || photo.sd || photo.hd || photo.full)}")` : '';
       els.viewToggle.innerHTML = state.grid ? viewerIcon_() : gridIcon_();
       els.viewToggle.setAttribute('aria-label', state.grid ? 'Open viewer' : 'Open album grid');
       els.selectToggle.innerHTML = state.grid
-        ? (state.selecting ? (state.selected.size === total ? 'Clear' : 'All') : 'Select')
+        ? (state.selecting ? closeIcon_() : selectCircleIcon_())
         : (state.selected.has(state.current) ? selectedCircleIcon_() : selectCircleIcon_());
       els.selectToggle.setAttribute('aria-label', state.grid ? 'Select photos' : 'Select current photo');
-      els.downloadBtn.textContent = state.selected.size ? `Download ${state.selected.size}` : 'Download';
+      els.downloadBtn.innerHTML = downloadIcon_();
+      els.downloadBtn.setAttribute('aria-label', state.selected.size ? `Download ${state.selected.size} selected photos` : 'Download current photo');
+      els.selectAllBtn.style.display = state.grid && state.selecting ? '' : 'none';
+      els.selectAllBtn.innerHTML = state.selected.size === total ? clearSelectionIcon_() : selectAllIcon_();
+      els.selectAllBtn.setAttribute('aria-label', state.selected.size === total ? 'Clear selection' : 'Select all photos');
       els.gridView.classList.toggle('active', state.grid);
       els.albumSelect.value = String(state.albumIndex);
       renderGridSelection();
@@ -637,10 +674,27 @@
       return '<svg viewBox="0 0 24 24" aria-hidden="true" style="width:18px;height:18px;fill:var(--orange);stroke:var(--orange);stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6" style="stroke:#fff;fill:none"/></svg>';
     }
 
+    function closeIcon_() {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+    }
+
+    function downloadIcon_() {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>';
+    }
+
+    function selectAllIcon_() {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 3 3 5-6"/></svg>';
+    }
+
+    function clearSelectionIcon_() {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 8l8 8M16 8l-8 8"/></svg>';
+    }
+
     function bindEvents() {
       els.albumSelect.addEventListener('change', event => loadAlbum(Number(event.target.value)));
       els.viewToggle.addEventListener('click', () => {
         state.grid = !state.grid;
+        if (state.grid && state.selected.size) state.selecting = true;
         updateChrome();
       });
       els.selectToggle.addEventListener('click', () => {
@@ -650,11 +704,19 @@
         }
         if (!state.selecting) {
           state.selecting = true;
-        } else if (state.selected.size === state.photos.length) {
+        } else {
+          state.selected.clear();
+          state.selecting = false;
+        }
+        updateChrome();
+      });
+      els.selectAllBtn.addEventListener('click', () => {
+        if (state.selected.size === state.photos.length) {
           state.selected.clear();
         } else {
           state.photos.forEach((_, index) => state.selected.add(index));
         }
+        state.selecting = !!state.selected.size;
         updateChrome();
       });
       els.downloadBtn.addEventListener('click', downloadRequested);
@@ -694,6 +756,10 @@
       if (state.pointerMap.size === 2) {
         state.lastDistance = touchDistance();
         state.baseScale = state.scale;
+        state.lastCenter = touchCenter();
+        state.zoomOriginX = (state.lastCenter.x / window.innerWidth) * 100;
+        state.zoomOriginY = (state.lastCenter.y / window.innerHeight) * 100;
+        state.dragging = false;
       }
     }
 
@@ -703,6 +769,12 @@
       state.pointerMap.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (state.pointerMap.size === 2) {
         const distance = touchDistance();
+        const center = touchCenter();
+        if (state.lastCenter) {
+          state.panX += center.x - state.lastCenter.x;
+          state.panY += center.y - state.lastCenter.y;
+        }
+        state.lastCenter = center;
         state.scale = clamp(state.baseScale * (distance / state.lastDistance), 1, 4);
         applyZoom();
         return;
@@ -721,16 +793,28 @@
 
     function onPointerUp(event) {
       state.pointerMap.delete(event.pointerId);
+      if (!state.grid && state.scale > 1 && state.pointerMap.size === 1) {
+        const remaining = Array.from(state.pointerMap.values())[0];
+        state.dragging = true;
+        state.startX = remaining.x;
+        state.lastX = remaining.x;
+        state.lastCenter = null;
+        return;
+      }
       if (!state.dragging || state.grid) return;
       const threshold = Math.min(110, window.innerWidth * .22);
+      let changedPhoto = false;
       if (state.scale === 1 && Math.abs(state.translateX) > threshold) {
-        state.current = state.translateX < 0
+        const nextIndex = state.translateX < 0
           ? Math.min(state.current + 1, state.photos.length - 1)
           : Math.max(state.current - 1, 0);
+        changedPhoto = nextIndex !== state.current;
+        state.current = nextIndex;
       }
       state.dragging = false;
       state.translateX = 0;
-      resetZoom();
+      if (changedPhoto || state.scale <= 1.02) resetZoom();
+      else applyZoom();
       setTrackPosition(false);
       updateChrome();
     }
@@ -763,6 +847,11 @@
     function applyZoom() {
       const wrap = els.track.querySelector(`.slide[data-index="${state.current}"] .photo-wrap`);
       if (!wrap) return;
+      if (state.scale <= 1.02) {
+        resetZoom();
+        return;
+      }
+      wrap.style.transformOrigin = `${state.zoomOriginX}% ${state.zoomOriginY}%`;
       wrap.style.transform = `translate3d(${state.panX}px, ${state.panY}px, 0) scale(${state.scale})`;
     }
 
@@ -771,13 +860,28 @@
       state.baseScale = 1;
       state.panX = 0;
       state.panY = 0;
-      els.track.querySelectorAll('.photo-wrap').forEach(wrap => { wrap.style.transform = ''; });
+      state.lastCenter = null;
+      state.zoomOriginX = 50;
+      state.zoomOriginY = 50;
+      els.track.querySelectorAll('.photo-wrap').forEach(wrap => {
+        wrap.style.transform = '';
+        wrap.style.transformOrigin = '';
+      });
     }
 
     function touchDistance() {
       const points = Array.from(state.pointerMap.values());
       if (points.length < 2) return 1;
       return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+    }
+
+    function touchCenter() {
+      const points = Array.from(state.pointerMap.values());
+      if (points.length < 2) return points[0] || { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+      return {
+        x: (points[0].x + points[1].x) / 2,
+        y: (points[0].y + points[1].y) / 2
+      };
     }
 
     function toggleSelected(index) {
