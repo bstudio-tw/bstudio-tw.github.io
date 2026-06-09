@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>B STUDIO Photo Album</title>
-  <meta name="description" content="B STUDIO PRODUCTION photo album viewer">
+  <title>Photo Album Viewer - B STUDIO PRODUCTION</title>
+  <meta name="description" content="Online Photo Album Viewer by B STUDIO PRODUCTION">
   <link rel="icon" href="https://t.kfs.io/organization_resource_files/40719/65789/favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="https://t.kfs.io/organization_resource_files/40719/65694/bstudioicon.png">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -713,9 +713,10 @@
 
     function kktixThumbUrl_(url) {
       const value = clean(url);
-      if (!value || !/^https:\/\/assets\.kktix\.io\//i.test(value)) return '';
+      if (!value || !/^https:\/\/(assets\.kktix\.io|t\.kfs\.io)\//i.test(value)) return '';
       if (/_thumb\.(jpe?g|png|webp)(\?.*)?$/i.test(value)) return value;
-      return value.replace(/\.(jpe?g|png|webp)(\?.*)?$/i, '_thumb.$1$2');
+      const thumb = value.replace(/\.(jpe?g|png|webp)(\?.*)?$/i, '_thumb.$1$2');
+      return thumb === value ? '' : thumb;
     }
 
     function autoKktixThumbFromRow_(row) {
@@ -731,7 +732,7 @@
           </div>
         </article>
       `).join('');
-      loadVisibleHd();
+      if (!state.grid) loadVisibleHd();
       setTrackPosition(false);
       els.empty.classList.toggle('active', !state.photos.length);
     }
@@ -773,7 +774,7 @@
       els.gridView.classList.toggle('active', state.grid);
       updateAlbumMenuState();
       renderGridSelection();
-      loadVisibleHd();
+      if (!state.grid) loadVisibleHd();
     }
 
     function renderGridSelection() {
