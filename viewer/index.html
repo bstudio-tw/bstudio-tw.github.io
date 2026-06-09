@@ -401,19 +401,19 @@
   </main>
 
   <script>
+    const APP_CONFIG_URL = '';
+    const DEFAULT_EVENT_ID = '';
+
     const DEFAULT_CONFIG = {
-      eventId: 'boatoat-1st-fm-taipei',
-      title: 'BoatOat 1st Fan Meeting in Taipei',
-      apiKey: 'AIzaSyAjosDnoaD8flQs9tp1vAGzmqU1MhSnpwE',
-      sheetId: '10JV43MqN5xoH1zUV_0OyZWaq7DCgwhsmCQSAiBr51ls',
+      eventId: '',
+      title: 'B STUDIO Photo Album',
+      apiKey: '',
+      sheetId: '',
       liffId: '',
       lineOnly: false,
       downloadProxy: '',
       copyrightText: '\u24d2 2026 B STUDIO PRODUCTION',
-      albums: [
-        { id: 'event', name: 'Event', sheetName: 'BoatOat 1st Fan Meeting in Taipei - Event' },
-        { id: 'benefits', name: 'Fan Benefits', sheetName: 'BoatOat 1st Fan Meeting in Taipei - Fan Benefits' }
-      ]
+      albums: []
     };
 
     const state = {
@@ -490,6 +490,9 @@
 
     function captureLaunchState() {
       const params = new URLSearchParams(location.search);
+      if (params.get('reset') === '1') {
+        ['event', 'album', 'config', 'liffId'].forEach(key => sessionStorage.removeItem('bstudio_' + key));
+      }
       ['event', 'album', 'config', 'liffId'].forEach(key => {
         if (params.get(key)) sessionStorage.setItem('bstudio_' + key, params.get(key));
       });
@@ -504,8 +507,8 @@
     }
 
     async function loadConfig() {
-      const configUrl = sessionStorage.getItem('bstudio_config');
-      const eventId = sessionStorage.getItem('bstudio_event');
+      const configUrl = sessionStorage.getItem('bstudio_config') || APP_CONFIG_URL;
+      const eventId = sessionStorage.getItem('bstudio_event') || DEFAULT_EVENT_ID;
       if (!configUrl) return DEFAULT_CONFIG;
       return jsonp(configUrl + (configUrl.includes('?') ? '&' : '?') + 'action=config&event=' + encodeURIComponent(eventId || '')).catch(() => DEFAULT_CONFIG);
     }
