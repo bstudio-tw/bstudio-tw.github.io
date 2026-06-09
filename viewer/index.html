@@ -274,12 +274,34 @@
       transform: translate(-50%, 120%);
       opacity: 0;
       transition: transform .28s ease, opacity .28s ease;
-      pointer-events: none;
+      pointer-events: auto;
       font-size: 12px;
       color: var(--muted);
     }
 
     .download-status.active { transform: translate(-50%, 0); opacity: 1; }
+    .download-status .status-message {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .status-cancel {
+      width: 28px;
+      min-width: 28px;
+      height: 28px;
+      min-height: 28px;
+      padding: 0;
+      border-radius: 999px;
+      color: rgba(255, 255, 255, .7);
+      background: rgba(255, 255, 255, .08);
+    }
+    .status-cancel svg {
+      width: 15px;
+      height: 15px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.4;
+      stroke-linecap: round;
+    }
     .spinner {
       width: 16px;
       height: 16px;
@@ -341,7 +363,11 @@
       <div id="caption"></div>
       <div class="copyright">ⓒ 2026 B STUDIO PRODUCTION</div>
     </div>
-    <div class="download-status" id="downloadStatus"><span class="spinner"></span><span id="downloadText">Preparing...</span></div>
+    <div class="download-status" id="downloadStatus">
+      <span class="spinner"></span>
+      <span class="status-message" id="downloadText">Preparing...</span>
+      <button class="status-cancel" id="cancelDownloadBtn" aria-label="Cancel download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
     <div class="empty" id="empty">No photos were found for this album.</div>
     <div class="gate" id="gate"><div><h1>Open in LINE</h1><p>This album is available through LINE only.</p></div></div>
   </main>
@@ -382,6 +408,8 @@
       panY: 0,
       lastDistance: 0,
       downloading: false,
+      downloadAbort: null,
+      downloadCanceled: false,
       gridObserver: null
     };
 
@@ -402,6 +430,7 @@
       selectedCount: document.getElementById('selectedCount'),
       status: document.getElementById('downloadStatus'),
       statusText: document.getElementById('downloadText'),
+      cancelDownloadBtn: document.getElementById('cancelDownloadBtn'),
       empty: document.getElementById('empty'),
       gate: document.getElementById('gate')
     };
@@ -621,6 +650,7 @@
         updateChrome();
       });
       els.downloadBtn.addEventListener('click', downloadRequested);
+      els.cancelDownloadBtn.addEventListener('click', cancelDownload);
       els.grid.addEventListener('click', event => {
         const tile = event.target.closest('.tile');
         if (!tile) return;
@@ -756,47 +786,82 @@
       const indexes = state.selected.size ? Array.from(state.selected) : [state.current];
       if (!indexes.length || !state.photos.length) return;
       state.downloading = true;
+      state.downloadCanceled = false;
+      state.downloadAbort = new AbortController();
       try {
         if (indexes.length === 1) {
           showStatus('Preparing download...');
           await delay(250);
+          ensureDownloadActive_();
           downloadUrl(state.photos[indexes[0]].full, fileName(indexes[0]));
           showStatus('Downloading...');
         } else {
-          await downloadZip(indexes);
+          await downloadZip(indexes, state.downloadAbort.signal);
         }
-        setTimeout(hideStatus, 1200);
+        if (!state.downloadCanceled) setTimeout(hideStatus, 1200);
       } catch (err) {
+        if (state.downloadCanceled || err.name === 'AbortError') {
+          showStatus('Download canceled.');
+          setTimeout(hideStatus, 900);
+          return;
+        }
         console.error(err);
         showStatus('Download failed. Try downloading fewer photos.');
         setTimeout(hideStatus, 2200);
       } finally {
-        setTimeout(() => { state.downloading = false; }, 1300);
+        setTimeout(() => {
+          state.downloading = false;
+          state.downloadAbort = null;
+          state.downloadCanceled = false;
+        }, 1000);
       }
     }
 
-    async function downloadZip(indexes) {
+    async function downloadZip(indexes, signal) {
       showStatus('Compressing files...');
       const zip = new JSZip();
       for (let i = 0; i < indexes.length; i++) {
+        ensureDownloadActive_();
         const index = indexes[i];
         const photo = state.photos[index];
         showStatus(`Adding ${i + 1} of ${indexes.length}...`);
         const url = downloadSource(photo.full);
-        const response = await fetch(url);
+        const response = await fetch(url, { signal });
         if (!response.ok) throw new Error('Unable to fetch image');
         const blob = await response.blob();
+        ensureDownloadActive_();
         zip.file(fileName(index), blob);
         await delay(20);
       }
+      ensureDownloadActive_();
       showStatus('Creating ZIP...');
       const blob = await zip.generateAsync({ type: 'blob' }, meta => {
+        if (state.downloadCanceled) throw new Error('Download canceled');
         showStatus(`Compressing ${Math.round(meta.percent)}%...`);
       });
+      ensureDownloadActive_();
       const url = URL.createObjectURL(blob);
       downloadUrl(url, `${safeName(state.config.title || 'bstudio-album')}.zip`);
       setTimeout(() => URL.revokeObjectURL(url), 120000);
       showStatus('Downloading ZIP...');
+    }
+
+    function cancelDownload() {
+      if (!state.downloading) {
+        hideStatus();
+        return;
+      }
+      state.downloadCanceled = true;
+      if (state.downloadAbort) state.downloadAbort.abort();
+      showStatus('Canceling...');
+    }
+
+    function ensureDownloadActive_() {
+      if (state.downloadCanceled) {
+        const err = new Error('Download canceled');
+        err.name = 'AbortError';
+        throw err;
+      }
     }
 
     function downloadSource(url) {
