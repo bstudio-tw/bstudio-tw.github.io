@@ -552,13 +552,26 @@
 
     function captureLaunchState() {
       const params = new URLSearchParams(location.search);
-      if (params.get('reset') === '1') {
+      const launchParams = mergeLiffStateParams(params);
+      if (launchParams.get('reset') === '1') {
         ['event', 'album', 'config', 'liffId'].forEach(key => sessionStorage.removeItem('bstudio_' + key));
       }
       ['event', 'album', 'config', 'liffId'].forEach(key => {
-        if (params.get(key)) sessionStorage.setItem('bstudio_' + key, params.get(key));
+        if (launchParams.get(key)) sessionStorage.setItem('bstudio_' + key, launchParams.get(key));
       });
       if (location.search) history.replaceState({}, document.title, location.origin + location.pathname);
+    }
+
+    function mergeLiffStateParams(params) {
+      const merged = new URLSearchParams(params);
+      const rawState = params.get('liff.state');
+      if (!rawState) return merged;
+      const stateText = decodeURIComponent(rawState);
+      const queryText = stateText.includes('?') ? stateText.slice(stateText.indexOf('?') + 1) : stateText.replace(/^\?/, '');
+      new URLSearchParams(queryText).forEach((value, key) => {
+        if (!merged.get(key)) merged.set(key, value);
+      });
+      return merged;
     }
 
     async function initLiff(config) {
