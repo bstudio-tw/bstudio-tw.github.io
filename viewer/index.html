@@ -209,6 +209,17 @@
     .photo.hd { opacity: 0; }
     .photo.hd.ready { opacity: 1; }
 
+    .video {
+      position: absolute;
+      max-width: 100%;
+      max-height: 100%;
+      background: #000;
+      object-fit: contain;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
     .caption {
       position: fixed;
       left: 14px;
@@ -309,6 +320,34 @@
     }
 
     .tile.loaded img { opacity: 1; }
+    .tile.video-tile {
+      display: grid;
+      place-items: center;
+    }
+    .tile.video-tile.no-thumb {
+      background: radial-gradient(circle at center, #252525, #111);
+    }
+    .video-badge {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, .58);
+      color: #fff;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, .38);
+      pointer-events: none;
+    }
+    .video-badge svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+      transform: translateX(1px);
+    }
     .tile .check {
       position: absolute;
       top: 7px;
@@ -701,13 +740,16 @@
       const thumb = explicitThumb
         ? (kktixThumbUrl_(explicitThumb) || explicitThumb)
         : autoKktixThumbFromRow_(row);
+      const mediaType = isVideoUrl_(full || hd || sd || original) ? 'video' : 'image';
+      const displayThumb = mediaType === 'video' ? thumb : (thumb || sd || hd || full);
       return {
         id: 'p' + index,
         caption,
-        thumb: thumb || sd || hd || full,
+        thumb: displayThumb,
         sd: sd || hd || full,
         hd: hd || sd || full,
-        full
+        full,
+        mediaType
       };
     }
 
@@ -723,12 +765,18 @@
       return [row[0], row[5], row[3], row[4]].map(kktixThumbUrl_).find(Boolean) || '';
     }
 
+    function isVideoUrl_(url) {
+      return /\.(mp4|m4v|mov|webm)(\?.*)?$/i.test(clean(url));
+    }
+
     function renderTrack() {
       els.track.innerHTML = state.photos.map((photo, index) => `
         <article class="slide" data-index="${index}">
           <div class="photo-wrap">
-            <img class="photo sd" data-src="${escapeAttr(photo.sd)}" alt="">
-            <img class="photo hd" data-src="${escapeAttr(photo.hd)}" alt="">
+            ${photo.mediaType === 'video'
+              ? `<video class="video" data-src="${escapeAttr(photo.full || photo.hd || photo.sd)}" ${photo.thumb ? `poster="${escapeAttr(photo.thumb)}"` : ''} controls playsinline preload="metadata"></video>`
+              : `<img class="photo sd" data-src="${escapeAttr(photo.sd)}" alt="">
+                 <img class="photo hd" data-src="${escapeAttr(photo.hd)}" alt="">`}
           </div>
         </article>
       `).join('');
@@ -739,8 +787,9 @@
 
     function renderGrid() {
       els.grid.innerHTML = state.photos.map((photo, index) => `
-        <button class="tile${state.selected.has(index) ? ' selected' : ''}" data-index="${index}" aria-label="Open photo ${index + 1}">
-          <img loading="lazy" data-src="${escapeAttr(photo.thumb)}" alt="">
+        <button class="tile${photo.mediaType === 'video' ? ' video-tile' : ''}${photo.mediaType === 'video' && !photo.thumb ? ' no-thumb' : ''}${state.selected.has(index) ? ' selected' : ''}" data-index="${index}" aria-label="Open ${photo.mediaType === 'video' ? 'video' : 'photo'} ${index + 1}">
+          ${photo.thumb ? `<img loading="lazy" data-src="${escapeAttr(photo.thumb)}" alt="">` : ''}
+          ${photo.mediaType === 'video' ? videoBadge_() : ''}
           <span class="check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>
         </button>
       `).join('');
@@ -759,7 +808,9 @@
       els.selectedCount.textContent = state.selecting ? `${state.selected.size} selected` : '';
       els.caption.textContent = state.grid ? '' : (photo && photo.caption ? photo.caption : '');
       els.copyrightText.textContent = state.grid ? '' : (state.config.copyrightText || '\u24d2 2026 B STUDIO PRODUCTION');
-      els.blurBg.style.backgroundImage = photo ? `url("${cssUrl(photo.thumb || photo.sd || photo.hd || photo.full)}")` : '';
+      if (state.grid) pauseAllVideos_();
+      const bgUrl = photo && photo.mediaType === 'video' ? photo.thumb : (photo ? (photo.thumb || photo.sd || photo.hd || photo.full) : '');
+      els.blurBg.style.backgroundImage = bgUrl ? `url("${cssUrl(bgUrl)}")` : '';
       els.viewToggle.innerHTML = state.grid ? viewerIcon_() : gridIcon_();
       els.viewToggle.setAttribute('aria-label', state.grid ? 'Open viewer' : 'Open album grid');
       els.selectToggle.innerHTML = state.grid
@@ -828,6 +879,10 @@
 
     function clearSelectionIcon_() {
       return '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 8l8 8M16 8l-8 8"/></svg>';
+    }
+
+    function videoBadge_() {
+      return '<span class="video-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span>';
     }
 
     function bindEvents() {
@@ -1061,9 +1116,12 @@
     }
 
     function loadVisibleHd() {
+      pauseInactiveVideos_();
       [state.current - 1, state.current, state.current + 1].forEach(index => {
         const slide = els.track.querySelector(`.slide[data-index="${index}"]`);
         if (!slide) return;
+        const video = slide.querySelector('video[data-src]');
+        if (video && index === state.current && !video.src) video.src = video.dataset.src;
         const sd = slide.querySelector('.photo.sd');
         if (sd && sd.dataset.src && !sd.src) {
           sd.onload = () => sd.classList.add('ready');
@@ -1077,6 +1135,18 @@
           }
         }
       });
+    }
+
+    function pauseInactiveVideos_() {
+      els.track.querySelectorAll('video').forEach(video => {
+        const slide = video.closest('.slide');
+        const index = slide ? Number(slide.dataset.index) : -1;
+        if (index !== state.current) video.pause();
+      });
+    }
+
+    function pauseAllVideos_() {
+      els.track.querySelectorAll('video').forEach(video => video.pause());
     }
 
     function applyZoom() {
