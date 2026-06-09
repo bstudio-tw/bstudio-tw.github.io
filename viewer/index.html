@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Photo Album Viewer - B STUDIO PRODUCTION</title>
+  <meta name="description" content="Online Photo Album Viewer by B STUDIO PRODUCTION">
+  <link rel="icon" href="https://t.kfs.io/organization_resource_files/40719/65789/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="https://t.kfs.io/organization_resource_files/40719/65694/bstudioicon.png">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --orange: #f06022;
+      --orange-2: #ff7a3d;
+      --bg: #050505;
+      --panel: rgba(12, 12, 12, .72);
+      --line: rgba(255, 255, 255, .14);
+      --text: #f5f5f5;
+      --muted: rgba(255, 255, 255, .68);
+      --soft: rgba(255, 255, 255, .08);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+
+    button, select {
+      font: inherit;
+      color: inherit;
+      border: 1px solid var(--line);
+      background: var(--soft);
+      border-radius: 8px;
+      min-height: 40px;
+    }
+
+    button {
+      display: inline-grid;
+      place-items: center;
+      min-width: 40px;
+      padding: 0 12px;
+      cursor: pointer;
+      backdrop-filter: blur(18px);
+    }
+
+    button.primary { background: var(--orange); border-color: var(--orange); color: #fff; }
+    button[disabled] { opacity: .46; cursor: not-allowed; }
+    select { padding: 0 34px 0 12px; background: rgba(245, 245, 245, .12); }
+
+    .app {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .topbar {
+      position: fixed;
+      top: env(safe-area-inset-top);
+      left: 0;
+      right: 0;
+      z-index: 30;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      background: linear-gradient(to bottom, rgba(0, 0, 0, .72), rgba(0, 0, 0, 0));
+      pointer-events: none;
+    }
+
+    .topbar > * { pointer-events: auto; }
+    .titleline { min-width: 0; }
+    .album-name { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .counter { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .actions { display: flex; gap: 8px; align-items: center; }
+
+    .stage {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .blur-bg {
+      position: absolute;
+      inset: -28px;
+      background-position: center;
+      background-size: cover;
+      filter: blur(24px);
+      transform: scale(1.08);
+      opacity: .42;
+      transition: background-image .18s ease, opacity .18s ease;
+    }
+
+    .track {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      will-change: transform;
+      touch-action: none;
+    }
+
+    .slide {
+      position: relative;
+      flex: 0 0 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+
+    .photo-wrap {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      transform-origin: center;
+      will-change: transform;
+    }
+
+    .photo {
+      position: absolute;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      transition: opacity .24s ease, filter .24s ease;
+      -webkit-user-drag: none;
+      pointer-events: none;
+    }
+
+    .photo.sd { opacity: 1; filter: saturate(.96); }
+    .photo.hd { opacity: 0; }
+    .photo.hd.ready { opacity: 1; }
+
+    .caption {
+      position: fixed;
+      left: 14px;
+      bottom: calc(18px + env(safe-area-inset-bottom));
+      z-index: 26;
+      max-width: min(70vw, 640px);
+      color: rgba(255, 255, 255, .84);
+      font-size: 12px;
+      line-height: 1.45;
+      text-shadow: 0 1px 14px rgba(0, 0, 0, .75);
+    }
+
+    .copyright {
+      margin-top: 3px;
+      color: rgba(255, 255, 255, .42);
+      font-size: 10px;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+
+    .grid-view {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      display: none;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      background: #080808;
+      padding: calc(74px + env(safe-area-inset-top)) 10px calc(96px + env(safe-area-inset-bottom));
+      touch-action: pan-y;
+    }
+
+    .grid-view.active { display: block; }
+    .grid-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 3px;
+    }
+
+    @media (min-width: 720px) {
+      .grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
+    }
+
+    .tile {
+      position: relative;
+      aspect-ratio: 1;
+      overflow: hidden;
+      background: #191919;
+      border: 0;
+      border-radius: 2px;
+      padding: 0;
+    }
+
+    .tile img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: .78;
+      transition: opacity .18s ease, transform .18s ease;
+    }
+
+    .tile.loaded img { opacity: 1; }
+    .tile.selected::after {
+      content: "";
+      position: absolute;
+      inset: 5px;
+      border: 2px solid var(--orange);
+      border-radius: 999px;
+      width: 22px;
+      height: 22px;
+      background: var(--orange);
+      box-shadow: 0 0 0 999px rgba(0, 0, 0, .22);
+      clip-path: circle(12px at 16px 16px);
+    }
+
+    .download-status {
+      position: fixed;
+      left: 50%;
+      bottom: calc(16px + env(safe-area-inset-bottom));
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: min(420px, calc(100vw - 28px));
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(18, 18, 18, .82);
+      backdrop-filter: blur(18px);
+      transform: translate(-50%, 120%);
+      opacity: 0;
+      transition: transform .28s ease, opacity .28s ease;
+      pointer-events: none;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .download-status.active { transform: translate(-50%, 0); opacity: 1; }
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, .18);
+      border-top-color: var(--orange);
+      border-radius: 50%;
+      animation: spin .75s linear infinite;
+      flex: 0 0 auto;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty, .gate {
+      position: fixed;
+      inset: 0;
+      display: none;
+      place-items: center;
+      padding: 24px;
+      text-align: center;
+      color: var(--muted);
+      background: #050505;
+      z-index: 60;
+    }
+
+    .empty.active, .gate.active { display: grid; }
+    .gate h1 { color: var(--text); font-size: 22px; margin: 0 0 8px; }
+    .gate p { margin: 0; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <main class="app" id="app">
+    <section class="stage" id="stage">
+      <div class="blur-bg" id="blurBg"></div>
+      <div class="track" id="track"></div>
+    </section>
+
+    <section class="grid-view" id="gridView">
+      <div class="grid-head">
+        <span id="gridCount">0 photos</span>
+        <span id="selectedCount">0 selected</span>
+      </div>
+      <div class="grid" id="grid"></div>
+    </section>
+
+    <header class="topbar">
+      <button id="viewToggle" aria-label="Toggle album view">Grid</button>
+      <div class="titleline">
+        <div class="album-name" id="albumName">B STUDIO</div>
+        <div class="counter" id="counter">Loading...</div>
+      </div>
+      <div class="actions">
+        <select id="albumSelect" aria-label="Album"></select>
+        <button id="selectToggle">Select</button>
+        <button class="primary" id="downloadBtn">Download</button>
+      </div>
+    </header>
+
+    <div class="caption">
+      <div id="caption"></div>
+      <div class="copyright">ⓒ 2026 B STUDIO PRODUCTION</div>
+    </div>
+    <div class="download-status" id="downloadStatus"><span class="spinner"></span><span id="downloadText">Preparing...</span></div>
+    <div class="empty" id="empty">No photos were found for this album.</div>
+    <div class="gate" id="gate"><div><h1>Open in LINE</h1><p>This album is available through LINE only.</p></div></div>
+  </main>
+
+  <script>
+    const DEFAULT_CONFIG = {
+      eventId: 'boatoat-1st-fm-taipei',
+      title: 'BoatOat 1st Fan Meeting in Taipei',
+      apiKey: 'AIzaSyAjosDnoaD8flQs9tp1vAGzmqU1MhSnpwE',
+      sheetId: '10JV43MqN5xoH1zUV_0OyZWaq7DCgwhsmCQSAiBr51ls',
+      liffId: '',
+      lineOnly: false,
+      downloadProxy: '',
+      copyrightText: '\u24d2 2026 B STUDIO PRODUCTION',
+      albums: [
+        { id: 'event', name: 'Event', sheetName: 'BoatOat 1st Fan Meeting in Taipei - Event' },
+        { id: 'benefits', name: 'Fan Benefits', sheetName: 'BoatOat 1st Fan Meeting in Taipei - Fan Benefits' }
+      ]
+    };
+
+    const state = {
+      config: null,
+      albums: [],
+      albumIndex: 0,
+      photos: [],
+      current: 0,
+      grid: false,
+      selecting: false,
+      selected: new Set(),
+      dragging: false,
+      startX: 0,
+      lastX: 0,
+      translateX: 0,
+      pointerMap: new Map(),
+      scale: 1,
+      baseScale: 1,
+      panX: 0,
+      panY: 0,
+      lastDistance: 0,
+      downloading: false
+    };
+
+    const els = {
+      track: document.getElementById('track'),
+      blurBg: document.getElementById('blurBg'),
+      albumName: document.getElementById('albumName'),
+      counter: document.getElementById('counter'),
+      caption: document.getElementById('caption'),
+      copyrightText: document.querySelector('.copyright'),
+      albumSelect: document.getElementById('albumSelect'),
+      viewToggle: document.getElementById('viewToggle'),
+      selectToggle: document.getElementById('selectToggle'),
+      downloadBtn: document.getElementById('downloadBtn'),
+      gridView: document.getElementById('gridView'),
+      grid: document.getElementById('grid'),
+      gridCount: document.getElementById('gridCount'),
+      selectedCount: document.getElementById('selectedCount'),
+      status: document.getElementById('downloadStatus'),
+      statusText: document.getElementById('downloadText'),
+      empty: document.getElementById('empty'),
+      gate: document.getElementById('gate')
+    };
+
+    init().catch(err => {
+      console.error(err);
+      els.counter.textContent = 'Unable to load album';
+    });
+
+    async function init() {
+      captureLaunchState();
+      state.config = await loadConfig();
+      await initLiff(state.config);
+      if (state.config.lineOnly && window.liff && !liff.isInClient()) {
+        els.gate.classList.add('active');
+        return;
+      }
+      state.albums = state.config.albums || [];
+      renderAlbumSelect();
+      bindEvents();
+      await loadAlbum(0);
+    }
+
+    function captureLaunchState() {
+      const params = new URLSearchParams(location.search);
+      ['event', 'album', 'config', 'liffId'].forEach(key => {
+        if (params.get(key)) sessionStorage.setItem('bstudio_' + key, params.get(key));
+      });
+      if (location.search) history.replaceState({}, document.title, location.origin + location.pathname);
+    }
+
+    async function initLiff(config) {
+      const liffId = sessionStorage.getItem('bstudio_liffId') || config.liffId || '';
+      if (!liffId || !window.liff) return;
+      await liff.init({ liffId });
+      if (!liff.isLoggedIn()) liff.login();
+    }
+
+    async function loadConfig() {
+      const configUrl = sessionStorage.getItem('bstudio_config');
+      const eventId = sessionStorage.getItem('bstudio_event');
+      if (!configUrl) return DEFAULT_CONFIG;
+      return jsonp(configUrl + (configUrl.includes('?') ? '&' : '?') + 'action=config&event=' + encodeURIComponent(eventId || '')).catch(() => DEFAULT_CONFIG);
+    }
+
+    function jsonp(url) {
+      return new Promise((resolve, reject) => {
+        const cb = 'bstudioCb' + Date.now() + Math.floor(Math.random() * 9999);
+        const script = document.createElement('script');
+        window[cb] = data => {
+          delete window[cb];
+          script.remove();
+          resolve(data);
+        };
+        script.onerror = reject;
+        script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
+        document.head.appendChild(script);
+      });
+    }
+
+    function renderAlbumSelect() {
+      els.albumSelect.innerHTML = state.albums.map((album, index) => `<option value="${index}">${escapeHtml(album.name)}</option>`).join('');
+      els.albumSelect.style.display = state.albums.length > 1 ? '' : 'none';
+      const wanted = sessionStorage.getItem('bstudio_album');
+      const startIndex = Math.max(0, state.albums.findIndex(album => album.id === wanted || album.sheetName === wanted));
+      state.albumIndex = startIndex;
+      els.albumSelect.value = String(startIndex);
+    }
+
+    async function loadAlbum(index) {
+      state.albumIndex = index;
+      state.current = 0;
+      state.selected.clear();
+      resetZoom();
+      const album = state.albums[index];
+      els.albumName.textContent = album ? album.name : state.config.title;
+      els.counter.textContent = 'Loading...';
+      els.empty.classList.remove('active');
+      state.photos = await fetchPhotos(album);
+      renderTrack();
+      renderGrid();
+      updateChrome();
+    }
+
+    async function fetchPhotos(album) {
+      if (!album) return [];
+      const sheetId = album.sheetId || state.config.sheetId;
+      const apiKey = album.apiKey || state.config.apiKey;
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(album.sheetName)}?key=${encodeURIComponent(apiKey)}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      const rows = data.values || [];
+      const body = rows.slice(1);
+      return body.map((row, index) => normalizePhoto(row, index)).filter(photo => photo.full || photo.hd || photo.sd);
+    }
+
+    function normalizePhoto(row, index) {
+      const first = clean(row[0]);
+      const caption = clean(row[1]);
+      return {
+        id: 'p' + index,
+        caption,
+        thumb: clean(row[2]) || sized(first, 360),
+        sd: clean(row[3]) || sized(first, 960),
+        hd: clean(row[4]) || sized(first, 1800),
+        full: clean(row[5]) || first
+      };
+    }
+
+    function sized(url) {
+      return url;
+    }
+
+    function renderTrack() {
+      els.track.innerHTML = state.photos.map((photo, index) => `
+        <article class="slide" data-index="${index}">
+          <div class="photo-wrap">
+            <img class="photo sd" src="${escapeAttr(photo.sd || photo.thumb || photo.full)}" alt="">
+            <img class="photo hd" data-src="${escapeAttr(photo.hd || photo.full || photo.sd)}" alt="">
+          </div>
+        </article>
+      `).join('');
+      loadVisibleHd();
+      setTrackPosition(false);
+      els.empty.classList.toggle('active', !state.photos.length);
+    }
+
+    function renderGrid() {
+      els.grid.innerHTML = state.photos.map((photo, index) => `
+        <button class="tile${state.selected.has(index) ? ' selected' : ''}" data-index="${index}" aria-label="Open photo ${index + 1}">
+          <img loading="lazy" src="${escapeAttr(photo.thumb || photo.sd || photo.hd || photo.full)}" alt="">
+        </button>
+      `).join('');
+      els.grid.querySelectorAll('img').forEach(img => img.addEventListener('load', () => img.parentElement.classList.add('loaded')));
+    }
+
+    function updateChrome() {
+      const total = state.photos.length;
+      const photo = state.photos[state.current];
+      const album = state.albums[state.albumIndex];
+      els.albumName.textContent = album ? album.name : state.config.title;
+      els.counter.textContent = state.grid ? `${total} photos` : `${Math.min(state.current + 1, total)} / ${total}`;
+      els.gridCount.textContent = `${total} photos`;
+      els.selectedCount.textContent = `${state.selected.size} selected`;
+      els.caption.textContent = state.grid ? '' : (photo && photo.caption ? photo.caption : '');
+      els.copyrightText.textContent = state.grid ? '' : (state.config.copyrightText || '\u24d2 2026 B STUDIO PRODUCTION');
+      els.blurBg.style.backgroundImage = photo ? `url("${cssUrl(photo.thumb || photo.sd || photo.hd || photo.full)}")` : '';
+      els.viewToggle.textContent = state.grid ? 'Viewer' : 'Grid';
+      els.selectToggle.textContent = state.selecting ? (state.selected.size === total ? 'Clear' : 'All') : 'Select';
+      els.downloadBtn.textContent = state.selected.size ? `Download ${state.selected.size}` : 'Download';
+      els.gridView.classList.toggle('active', state.grid);
+      els.albumSelect.value = String(state.albumIndex);
+      renderGridSelection();
+      loadVisibleHd();
+    }
+
+    function renderGridSelection() {
+      els.grid.querySelectorAll('.tile').forEach(tile => {
+        tile.classList.toggle('selected', state.selected.has(Number(tile.dataset.index)));
+      });
+    }
+
+    function bindEvents() {
+      els.albumSelect.addEventListener('change', event => loadAlbum(Number(event.target.value)));
+      els.viewToggle.addEventListener('click', () => {
+        state.grid = !state.grid;
+        updateChrome();
+      });
+      els.selectToggle.addEventListener('click', () => {
+        if (!state.selecting) {
+          state.selecting = true;
+        } else if (state.selected.size === state.photos.length) {
+          state.selected.clear();
+        } else {
+          state.photos.forEach((_, index) => state.selected.add(index));
+        }
+        updateChrome();
+      });
+      els.downloadBtn.addEventListener('click', downloadRequested);
+      els.grid.addEventListener('click', event => {
+        const tile = event.target.closest('.tile');
+        if (!tile) return;
+        const index = Number(tile.dataset.index);
+        if (state.selecting) {
+          toggleSelected(index);
+          return;
+        }
+        state.current = index;
+        state.grid = false;
+        resetZoom();
+        setTrackPosition(false);
+        updateChrome();
+      });
+
+      const stage = document.getElementById('stage');
+      stage.addEventListener('pointerdown', onPointerDown);
+      stage.addEventListener('pointermove', onPointerMove);
+      stage.addEventListener('pointerup', onPointerUp);
+      stage.addEventListener('pointercancel', onPointerUp);
+    }
+
+    function onPointerDown(event) {
+      event.preventDefault();
+      state.pointerMap.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      event.currentTarget.setPointerCapture(event.pointerId);
+      if (state.pointerMap.size === 1) {
+        state.dragging = true;
+        state.startX = event.clientX;
+        state.lastX = event.clientX;
+        state.translateX = 0;
+      }
+      if (state.pointerMap.size === 2) {
+        state.lastDistance = touchDistance();
+        state.baseScale = state.scale;
+      }
+    }
+
+    function onPointerMove(event) {
+      if (!state.pointerMap.has(event.pointerId)) return;
+      const previous = state.pointerMap.get(event.pointerId);
+      state.pointerMap.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (state.pointerMap.size === 2) {
+        const distance = touchDistance();
+        state.scale = clamp(state.baseScale * (distance / state.lastDistance), 1, 4);
+        applyZoom();
+        return;
+      }
+      if (!state.dragging || state.grid) return;
+      const dx = event.clientX - state.startX;
+      if (state.scale > 1) {
+        state.panX += event.clientX - previous.x;
+        state.panY += event.clientY - previous.y;
+        applyZoom();
+        return;
+      }
+      state.translateX = dx;
+      setTrackPosition(true);
+    }
+
+    function onPointerUp(event) {
+      state.pointerMap.delete(event.pointerId);
+      if (!state.dragging || state.grid) return;
+      const threshold = Math.min(110, window.innerWidth * .22);
+      if (state.scale === 1 && Math.abs(state.translateX) > threshold) {
+        state.current = state.translateX < 0
+          ? Math.min(state.current + 1, state.photos.length - 1)
+          : Math.max(state.current - 1, 0);
+      }
+      state.dragging = false;
+      state.translateX = 0;
+      resetZoom();
+      setTrackPosition(false);
+      updateChrome();
+    }
+
+    function setTrackPosition(activeDrag) {
+      els.track.style.transition = activeDrag ? 'none' : 'transform .28s cubic-bezier(.2, .8, .2, 1)';
+      const x = -state.current * window.innerWidth + state.translateX;
+      els.track.style.transform = `translate3d(${x}px, 0, 0)`;
+    }
+
+    function loadVisibleHd() {
+      [state.current - 1, state.current, state.current + 1].forEach(index => {
+        const slide = els.track.querySelector(`.slide[data-index="${index}"]`);
+        if (!slide) return;
+        const img = slide.querySelector('.photo.hd');
+        if (img && img.dataset.src && !img.src) {
+          img.onload = () => img.classList.add('ready');
+          img.src = img.dataset.src;
+        }
+      });
+    }
+
+    function applyZoom() {
+      const wrap = els.track.querySelector(`.slide[data-index="${state.current}"] .photo-wrap`);
+      if (!wrap) return;
+      wrap.style.transform = `translate3d(${state.panX}px, ${state.panY}px, 0) scale(${state.scale})`;
+    }
+
+    function resetZoom() {
+      state.scale = 1;
+      state.baseScale = 1;
+      state.panX = 0;
+      state.panY = 0;
+      els.track.querySelectorAll('.photo-wrap').forEach(wrap => { wrap.style.transform = ''; });
+    }
+
+    function touchDistance() {
+      const points = Array.from(state.pointerMap.values());
+      if (points.length < 2) return 1;
+      return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+    }
+
+    function toggleSelected(index) {
+      if (state.selected.has(index)) state.selected.delete(index);
+      else state.selected.add(index);
+      updateChrome();
+    }
+
+    async function downloadRequested() {
+      if (state.downloading) {
+        showStatus('Please wait for the current download to finish.');
+        return;
+      }
+      const indexes = state.selected.size ? Array.from(state.selected) : [state.current];
+      if (!indexes.length || !state.photos.length) return;
+      state.downloading = true;
+      try {
+        if (indexes.length === 1) {
+          showStatus('Preparing download...');
+          await delay(250);
+          downloadUrl(state.photos[indexes[0]].full, fileName(indexes[0]));
+          showStatus('Downloading...');
+        } else {
+          await downloadZip(indexes);
+        }
+        setTimeout(hideStatus, 1200);
+      } catch (err) {
+        console.error(err);
+        showStatus('Download failed. Try downloading fewer photos.');
+        setTimeout(hideStatus, 2200);
+      } finally {
+        setTimeout(() => { state.downloading = false; }, 1300);
+      }
+    }
+
+    async function downloadZip(indexes) {
+      showStatus('Compressing files...');
+      const zip = new JSZip();
+      for (let i = 0; i < indexes.length; i++) {
+        const index = indexes[i];
+        const photo = state.photos[index];
+        showStatus(`Adding ${i + 1} of ${indexes.length}...`);
+        const url = downloadSource(photo.full);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Unable to fetch image');
+        const blob = await response.blob();
+        zip.file(fileName(index), blob);
+        await delay(20);
+      }
+      showStatus('Creating ZIP...');
+      const blob = await zip.generateAsync({ type: 'blob' }, meta => {
+        showStatus(`Compressing ${Math.round(meta.percent)}%...`);
+      });
+      const url = URL.createObjectURL(blob);
+      downloadUrl(url, `${safeName(state.config.title || 'bstudio-album')}.zip`);
+      setTimeout(() => URL.revokeObjectURL(url), 120000);
+      showStatus('Downloading ZIP...');
+    }
+
+    function downloadSource(url) {
+      return state.config.downloadProxy ? state.config.downloadProxy + encodeURIComponent(url) : url;
+    }
+
+    function downloadUrl(url, name) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = name;
+      link.rel = 'noopener';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
+
+    function showStatus(text) {
+      els.statusText.textContent = text;
+      els.status.classList.add('active');
+    }
+
+    function hideStatus() {
+      els.status.classList.remove('active');
+    }
+
+    function fileName(index) {
+      return `${safeName(state.config.title || 'bstudio')}_${String(index + 1).padStart(4, '0')}.jpg`;
+    }
+
+    function safeName(value) {
+      return String(value || 'photo').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'photo';
+    }
+
+    function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+    function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
+    function clean(value) { return String(value || '').trim(); }
+    function escapeHtml(value) { return clean(value).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
+    function escapeAttr(value) { return escapeHtml(value); }
+    function cssUrl(value) { return clean(value).replace(/["\\]/g, '\\$&'); }
+  </script>
+</body>
+</html>
