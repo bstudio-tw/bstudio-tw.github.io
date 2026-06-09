@@ -546,7 +546,14 @@
       els.albumName.textContent = album ? album.name : state.config.title;
       els.counter.textContent = 'Loading...';
       els.empty.classList.remove('active');
-      state.photos = await fetchPhotos(album);
+      els.empty.textContent = 'No photos were found for this album.';
+      try {
+        state.photos = await fetchPhotos(album);
+      } catch (err) {
+        console.error(err);
+        state.photos = [];
+        els.empty.textContent = err.message || 'Unable to load this album.';
+      }
       renderTrack();
       renderGrid();
       updateChrome();
@@ -556,9 +563,16 @@
       if (!album) return [];
       const sheetId = album.sheetId || state.config.sheetId;
       const apiKey = album.apiKey || state.config.apiKey;
+      if (!sheetId) throw new Error('Album setup is missing Google Sheet ID.');
+      if (!album.sheetName) throw new Error('Album setup is missing Sheet Name.');
+      if (!apiKey) throw new Error('Album setup is missing Google Sheets API Key.');
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(album.sheetName)}?key=${encodeURIComponent(apiKey)}`;
       const response = await fetch(url);
       const data = await response.json();
+      if (!response.ok || data.error) {
+        const message = data.error && data.error.message ? data.error.message : `Google Sheets returned HTTP ${response.status}.`;
+        throw new Error(message);
+      }
       const rows = data.values || [];
       const body = rows.slice(1);
       return body.map((row, index) => normalizePhoto(row, index)).filter(photo => photo.full || photo.hd || photo.sd);
