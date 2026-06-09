@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Photo Album Viewer - B STUDIO PRODUCTION</title>
-  <meta name="description" content="Online Photo Album Viewer by B STUDIO PRODUCTIONr">
+  <meta name="description" content="Online Photo Album Viewer by B STUDIO PRODUCTION">
   <link rel="icon" href="https://t.kfs.io/organization_resource_files/40719/65789/favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="https://t.kfs.io/organization_resource_files/40719/65694/bstudioicon.png">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -438,6 +438,8 @@
       lastCenter: null,
       zoomOriginX: 50,
       zoomOriginY: 50,
+      zoomDragKind: '',
+      openingGrid: false,
       downloading: false,
       downloadAbort: null,
       downloadCanceled: false,
@@ -752,6 +754,7 @@
         state.startX = event.clientX;
         state.lastX = event.clientX;
         state.translateX = 0;
+        state.zoomDragKind = state.scale > 1 ? 'single' : '';
       }
       if (state.pointerMap.size === 2) {
         state.lastDistance = touchDistance();
@@ -759,6 +762,7 @@
         state.lastCenter = touchCenter();
         state.zoomOriginX = (state.lastCenter.x / window.innerWidth) * 100;
         state.zoomOriginY = (state.lastCenter.y / window.innerHeight) * 100;
+        state.zoomDragKind = 'pinch';
         state.dragging = false;
       }
     }
@@ -775,7 +779,9 @@
           state.panY += center.y - state.lastCenter.y;
         }
         state.lastCenter = center;
-        state.scale = clamp(state.baseScale * (distance / state.lastDistance), 1, 4);
+        const minScale = state.baseScale <= 1.02 ? 0.72 : 1;
+        state.scale = clamp(state.baseScale * (distance / state.lastDistance), minScale, 4);
+        state.zoomDragKind = 'pinch';
         applyZoom();
         return;
       }
@@ -784,6 +790,7 @@
       if (state.scale > 1) {
         state.panX += event.clientX - previous.x;
         state.panY += event.clientY - previous.y;
+        state.zoomDragKind = 'single';
         applyZoom();
         return;
       }
@@ -793,15 +800,31 @@
 
     function onPointerUp(event) {
       state.pointerMap.delete(event.pointerId);
+      if (state.openingGrid) return;
+      if (!state.grid && state.zoomDragKind === 'pinch' && state.pointerMap.size < 2 && state.scale < 0.86) {
+        openGridFromPinch_();
+        return;
+      }
       if (!state.grid && state.scale > 1 && state.pointerMap.size === 1) {
         const remaining = Array.from(state.pointerMap.values())[0];
         state.dragging = true;
         state.startX = remaining.x;
         state.lastX = remaining.x;
         state.lastCenter = null;
+        state.zoomDragKind = 'pinch';
         return;
       }
       if (!state.dragging || state.grid) return;
+      if (state.zoomDragKind === 'pinch' && state.scale < 1) {
+        resetZoom();
+        setTrackPosition(false);
+        updateChrome();
+        return;
+      }
+      if (state.scale > 1) {
+        settleZoomPan_();
+        return;
+      }
       const threshold = Math.min(110, window.innerWidth * .22);
       let changedPhoto = false;
       if (state.scale === 1 && Math.abs(state.translateX) > threshold) {
@@ -848,11 +871,90 @@
       const wrap = els.track.querySelector(`.slide[data-index="${state.current}"] .photo-wrap`);
       if (!wrap) return;
       if (state.scale <= 1.02) {
+        if (!(state.zoomDragKind === 'pinch' && state.scale < 1)) {
+          resetZoom();
+          return;
+        }
+      }
+      const bounds = zoomBounds_();
+      const displayX = rubberBand_(state.panX, bounds.x);
+      const displayY = rubberBand_(state.panY, bounds.y);
+      wrap.style.transformOrigin = `${state.zoomOriginX}% ${state.zoomOriginY}%`;
+      wrap.style.transition = '';
+      wrap.style.transform = `translate3d(${displayX}px, ${displayY}px, 0) scale(${state.scale})`;
+    }
+
+    function openGridFromPinch_() {
+      if (state.openingGrid) return;
+      state.openingGrid = true;
+      const wrap = els.track.querySelector(`.slide[data-index="${state.current}"] .photo-wrap`);
+      state.dragging = false;
+      state.translateX = 0;
+      if (wrap) {
+        wrap.style.transition = 'transform .24s cubic-bezier(.2, .8, .2, 1), opacity .2s ease';
+        wrap.style.transformOrigin = `${state.zoomOriginX}% ${state.zoomOriginY}%`;
+        wrap.style.transform = `translate3d(${state.panX * .25}px, ${state.panY * .25}px, 0) scale(.58)`;
+        wrap.style.opacity = '0';
+      }
+      setTimeout(() => {
+        state.grid = true;
+        state.openingGrid = false;
+        resetZoom();
+        setTrackPosition(false);
+        updateChrome();
+      }, 180);
+    }
+
+    function settleZoomPan_() {
+      const bounds = zoomBounds_();
+      const threshold = Math.min(120, window.innerWidth * .24);
+      let nextIndex = state.current;
+      if (state.zoomDragKind === 'single') {
+        if (state.panX < -bounds.x - threshold) nextIndex = Math.min(state.current + 1, state.photos.length - 1);
+        if (state.panX > bounds.x + threshold) nextIndex = Math.max(state.current - 1, 0);
+      }
+      if (nextIndex !== state.current) {
+        state.current = nextIndex;
+        state.dragging = false;
+        state.translateX = 0;
+        resetZoom();
+        setTrackPosition(false);
+        updateChrome();
+        return;
+      }
+
+      state.panX = clamp(state.panX, -bounds.x, bounds.x);
+      state.panY = clamp(state.panY, -bounds.y, bounds.y);
+      state.dragging = false;
+      state.translateX = 0;
+      animateZoomSettle_();
+      setTrackPosition(false);
+      updateChrome();
+    }
+
+    function animateZoomSettle_() {
+      const wrap = els.track.querySelector(`.slide[data-index="${state.current}"] .photo-wrap`);
+      if (!wrap) return;
+      if (state.scale <= 1.02) {
         resetZoom();
         return;
       }
+      wrap.style.transition = 'transform .22s cubic-bezier(.2, .8, .2, 1)';
       wrap.style.transformOrigin = `${state.zoomOriginX}% ${state.zoomOriginY}%`;
       wrap.style.transform = `translate3d(${state.panX}px, ${state.panY}px, 0) scale(${state.scale})`;
+    }
+
+    function zoomBounds_() {
+      const overflowX = Math.max(0, (window.innerWidth * state.scale - window.innerWidth) / 2);
+      const overflowY = Math.max(0, (window.innerHeight * state.scale - window.innerHeight) / 2);
+      return { x: overflowX, y: overflowY };
+    }
+
+    function rubberBand_(value, limit) {
+      const abs = Math.abs(value);
+      if (abs <= limit) return value;
+      const over = abs - limit;
+      return Math.sign(value) * (limit + over * .28);
     }
 
     function resetZoom() {
@@ -863,9 +965,12 @@
       state.lastCenter = null;
       state.zoomOriginX = 50;
       state.zoomOriginY = 50;
+      state.zoomDragKind = '';
       els.track.querySelectorAll('.photo-wrap').forEach(wrap => {
         wrap.style.transform = '';
         wrap.style.transformOrigin = '';
+        wrap.style.transition = '';
+        wrap.style.opacity = '';
       });
     }
 
