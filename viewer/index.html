@@ -53,6 +53,8 @@
 
     button.primary { background: var(--orange); border-color: var(--orange); color: #fff; }
     button[disabled] { opacity: .46; cursor: not-allowed; }
+    .icon-button { width: 40px; padding: 0; }
+    .icon-button svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     select { padding: 0 34px 0 12px; background: rgba(245, 245, 245, .12); }
 
     .app {
@@ -214,17 +216,45 @@
     }
 
     .tile.loaded img { opacity: 1; }
-    .tile.selected::after {
-      content: "";
+    .tile .check {
       position: absolute;
-      inset: 5px;
+      top: 7px;
+      right: 7px;
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
       border: 2px solid var(--orange);
       border-radius: 999px;
-      width: 22px;
-      height: 22px;
+      background: rgba(0, 0, 0, .42);
+      color: transparent;
+      box-shadow: 0 3px 14px rgba(0, 0, 0, .32);
+      opacity: 0;
+      transform: scale(.88);
+      transition: opacity .16s ease, transform .16s ease, background .16s ease, color .16s ease;
+    }
+
+    .tile.selecting .check,
+    .tile.selected .check {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .tile.selected .check {
       background: var(--orange);
-      box-shadow: 0 0 0 999px rgba(0, 0, 0, .22);
-      clip-path: circle(12px at 16px 16px);
+      color: #fff;
+    }
+
+    .tile.selected img { opacity: .56; }
+
+    .tile .check svg {
+      width: 15px;
+      height: 15px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
 
     .download-status {
@@ -295,7 +325,7 @@
     </section>
 
     <header class="topbar">
-      <button id="viewToggle" aria-label="Toggle album view">Grid</button>
+      <button class="icon-button" id="viewToggle" aria-label="Toggle album view"></button>
       <div class="titleline">
         <div class="album-name" id="albumName">B STUDIO</div>
         <div class="counter" id="counter">Loading...</div>
@@ -351,7 +381,8 @@
       panX: 0,
       panY: 0,
       lastDistance: 0,
-      downloading: false
+      downloading: false,
+      gridObserver: null
     };
 
     const els = {
@@ -468,28 +499,27 @@
     }
 
     function normalizePhoto(row, index) {
-      const first = clean(row[0]);
+      const full = clean(row[5]) || clean(row[0]);
       const caption = clean(row[1]);
+      const thumb = clean(row[2]);
+      const sd = clean(row[3]);
+      const hd = clean(row[4]);
       return {
         id: 'p' + index,
         caption,
-        thumb: clean(row[2]) || sized(first, 360),
-        sd: clean(row[3]) || sized(first, 960),
-        hd: clean(row[4]) || sized(first, 1800),
-        full: clean(row[5]) || first
+        thumb: thumb || sd || hd || full,
+        sd: sd || thumb || hd || full,
+        hd: hd || sd || thumb || full,
+        full
       };
-    }
-
-    function sized(url) {
-      return url;
     }
 
     function renderTrack() {
       els.track.innerHTML = state.photos.map((photo, index) => `
         <article class="slide" data-index="${index}">
           <div class="photo-wrap">
-            <img class="photo sd" src="${escapeAttr(photo.sd || photo.thumb || photo.full)}" alt="">
-            <img class="photo hd" data-src="${escapeAttr(photo.hd || photo.full || photo.sd)}" alt="">
+            <img class="photo sd" data-src="${escapeAttr(photo.sd)}" alt="">
+            <img class="photo hd" data-src="${escapeAttr(photo.hd)}" alt="">
           </div>
         </article>
       `).join('');
@@ -501,10 +531,12 @@
     function renderGrid() {
       els.grid.innerHTML = state.photos.map((photo, index) => `
         <button class="tile${state.selected.has(index) ? ' selected' : ''}" data-index="${index}" aria-label="Open photo ${index + 1}">
-          <img loading="lazy" src="${escapeAttr(photo.thumb || photo.sd || photo.hd || photo.full)}" alt="">
+          <img loading="lazy" data-src="${escapeAttr(photo.thumb)}" alt="">
+          <span class="check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>
         </button>
       `).join('');
       els.grid.querySelectorAll('img').forEach(img => img.addEventListener('load', () => img.parentElement.classList.add('loaded')));
+      observeGridImages();
     }
 
     function updateChrome() {
@@ -518,8 +550,12 @@
       els.caption.textContent = state.grid ? '' : (photo && photo.caption ? photo.caption : '');
       els.copyrightText.textContent = state.grid ? '' : (state.config.copyrightText || '\u24d2 2026 B STUDIO PRODUCTION');
       els.blurBg.style.backgroundImage = photo ? `url("${cssUrl(photo.thumb || photo.sd || photo.hd || photo.full)}")` : '';
-      els.viewToggle.textContent = state.grid ? 'Viewer' : 'Grid';
-      els.selectToggle.textContent = state.selecting ? (state.selected.size === total ? 'Clear' : 'All') : 'Select';
+      els.viewToggle.innerHTML = state.grid ? viewerIcon_() : gridIcon_();
+      els.viewToggle.setAttribute('aria-label', state.grid ? 'Open viewer' : 'Open album grid');
+      els.selectToggle.innerHTML = state.grid
+        ? (state.selecting ? (state.selected.size === total ? 'Clear' : 'All') : 'Select')
+        : (state.selected.has(state.current) ? selectedCircleIcon_() : selectCircleIcon_());
+      els.selectToggle.setAttribute('aria-label', state.grid ? 'Select photos' : 'Select current photo');
       els.downloadBtn.textContent = state.selected.size ? `Download ${state.selected.size}` : 'Download';
       els.gridView.classList.toggle('active', state.grid);
       els.albumSelect.value = String(state.albumIndex);
@@ -529,8 +565,39 @@
 
     function renderGridSelection() {
       els.grid.querySelectorAll('.tile').forEach(tile => {
-        tile.classList.toggle('selected', state.selected.has(Number(tile.dataset.index)));
+        const selected = state.selected.has(Number(tile.dataset.index));
+        tile.classList.toggle('selected', selected);
+        tile.classList.toggle('selecting', state.selecting);
       });
+    }
+
+    function observeGridImages() {
+      if (state.gridObserver) state.gridObserver.disconnect();
+      state.gridObserver = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) return;
+          const img = entry.target;
+          if (img.dataset.src && !img.src) img.src = img.dataset.src;
+          state.gridObserver.unobserve(img);
+        });
+      }, { root: els.gridView, rootMargin: '420px 0px' });
+      els.grid.querySelectorAll('img[data-src]').forEach(img => state.gridObserver.observe(img));
+    }
+
+    function gridIcon_() {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>';
+    }
+
+    function viewerIcon_() {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m7 15 3-3 2 2 3-4 3 5"/></svg>';
+    }
+
+    function selectCircleIcon_() {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="9"/></svg>';
+    }
+
+    function selectedCircleIcon_() {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true" style="width:18px;height:18px;fill:var(--orange);stroke:var(--orange);stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6" style="stroke:#fff;fill:none"/></svg>';
     }
 
     function bindEvents() {
@@ -540,6 +607,10 @@
         updateChrome();
       });
       els.selectToggle.addEventListener('click', () => {
+        if (!state.grid) {
+          toggleSelected(state.current);
+          return;
+        }
         if (!state.selecting) {
           state.selecting = true;
         } else if (state.selected.size === state.photos.length) {
@@ -636,10 +707,17 @@
       [state.current - 1, state.current, state.current + 1].forEach(index => {
         const slide = els.track.querySelector(`.slide[data-index="${index}"]`);
         if (!slide) return;
-        const img = slide.querySelector('.photo.hd');
-        if (img && img.dataset.src && !img.src) {
-          img.onload = () => img.classList.add('ready');
-          img.src = img.dataset.src;
+        const sd = slide.querySelector('.photo.sd');
+        if (sd && sd.dataset.src && !sd.src) {
+          sd.onload = () => sd.classList.add('ready');
+          sd.src = sd.dataset.src;
+        }
+        if (index === state.current) {
+          const hd = slide.querySelector('.photo.hd');
+          if (hd && hd.dataset.src && !hd.src) {
+            hd.onload = () => hd.classList.add('ready');
+            hd.src = hd.dataset.src;
+          }
         }
       });
     }
