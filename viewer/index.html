@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Photo Album Viewer - B STUDIO PRODUCTION</title>
-  <meta name="description" content="Online Photo Album Viewer by B STUDIO PRODUCTION">
+  <title>B STUDIO Photo Album</title>
+  <meta name="description" content="B STUDIO PRODUCTION photo album viewer">
   <link rel="icon" href="https://t.kfs.io/organization_resource_files/40719/65789/favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="https://t.kfs.io/organization_resource_files/40719/65694/bstudioicon.png">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -30,6 +30,7 @@
       color: var(--text);
       user-select: none;
       -webkit-user-select: none;
+      -webkit-touch-callout: none;
       touch-action: none;
     }
 
@@ -162,6 +163,8 @@
       transition: background-image .18s ease, opacity .18s ease;
     }
 
+    .app.grid-opening .blur-bg { opacity: 0; }
+
     .track {
       position: absolute;
       inset: 0;
@@ -195,6 +198,9 @@
       max-height: 100%;
       object-fit: contain;
       transition: opacity .24s ease, filter .24s ease;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
       -webkit-user-drag: none;
       pointer-events: none;
     }
@@ -295,6 +301,11 @@
       object-fit: cover;
       opacity: .78;
       transition: opacity .18s ease, transform .18s ease;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-user-drag: none;
+      pointer-events: none;
     }
 
     .tile.loaded img { opacity: 1; }
@@ -414,7 +425,7 @@
   </style>
 </head>
 <body>
-  <main class="app" id="app">
+  <main class="app" id="app" tabindex="-1">
     <section class="stage" id="stage">
       <div class="blur-bg" id="blurBg"></div>
       <div class="track" id="track"></div>
@@ -492,6 +503,7 @@
       pointerMap: new Map(),
       scale: 1,
       baseScale: 1,
+      pinchStartScale: 1,
       panX: 0,
       panY: 0,
       lastDistance: 0,
@@ -507,6 +519,7 @@
     };
 
     const els = {
+      app: document.getElementById('app'),
       track: document.getElementById('track'),
       blurBg: document.getElementById('blurBg'),
       albumName: document.getElementById('albumName'),
@@ -554,6 +567,7 @@
       renderAlbumMenu();
       bindEvents();
       await loadAlbum(state.albumIndex);
+      focusApp_();
     }
 
     function captureLaunchState() {
@@ -681,9 +695,12 @@
       const full = clean(row[5]) || clean(row[0]);
       const caption = clean(row[1]);
       const original = clean(row[0]);
-      const thumb = clean(row[2]) || kktixThumbUrl_(original || full);
       const sd = clean(row[3]);
       const hd = clean(row[4]);
+      const explicitThumb = clean(row[2]);
+      const thumb = explicitThumb
+        ? (kktixThumbUrl_(explicitThumb) || explicitThumb)
+        : autoKktixThumbFromRow_(row);
       return {
         id: 'p' + index,
         caption,
@@ -699,6 +716,10 @@
       if (!value || !/^https:\/\/assets\.kktix\.io\//i.test(value)) return '';
       if (/_thumb\.(jpe?g|png|webp)(\?.*)?$/i.test(value)) return value;
       return value.replace(/\.(jpe?g|png|webp)(\?.*)?$/i, '_thumb.$1$2');
+    }
+
+    function autoKktixThumbFromRow_(row) {
+      return [row[0], row[5], row[3], row[4]].map(kktixThumbUrl_).find(Boolean) || '';
     }
 
     function renderTrack() {
@@ -823,7 +844,12 @@
       document.addEventListener('click', event => {
         if (!els.titleline.contains(event.target)) els.titleline.classList.remove('menu-open');
       });
+      document.addEventListener('contextmenu', blockSaveMenu);
+      document.addEventListener('dragstart', blockSaveMenu);
+      document.addEventListener('selectstart', blockSaveMenu);
+      window.addEventListener('keydown', handleKeyboard, true);
       els.viewToggle.addEventListener('click', () => {
+        focusApp_();
         state.grid = !state.grid;
         if (state.grid && state.selected.size) state.selecting = true;
         updateChrome();
@@ -853,6 +879,7 @@
       els.downloadBtn.addEventListener('click', downloadRequested);
       els.cancelDownloadBtn.addEventListener('click', cancelDownload);
       els.grid.addEventListener('click', event => {
+        focusApp_();
         const tile = event.target.closest('.tile');
         if (!tile) return;
         const index = Number(tile.dataset.index);
@@ -874,8 +901,58 @@
       stage.addEventListener('pointercancel', onPointerUp);
     }
 
+    function blockSaveMenu(event) {
+      if (event.target.closest('button, .album-menu')) return;
+      event.preventDefault();
+    }
+
+    function handleKeyboard(event) {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      const tag = event.target && event.target.tagName ? event.target.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      const key = event.key;
+      const code = event.code;
+      if (state.grid) {
+        if (key === 'ArrowUp' || key === 'ArrowDown' || code === 'ArrowUp' || code === 'ArrowDown') {
+          event.preventDefault();
+          event.stopPropagation();
+          const direction = key === 'ArrowDown' || code === 'ArrowDown' ? 1 : -1;
+          els.gridView.scrollBy({ top: direction * Math.max(180, window.innerHeight * .55), behavior: 'smooth' });
+        }
+        return;
+      }
+      if (key === 'ArrowRight' || code === 'ArrowRight' || key === ' ' || key === 'Spacebar' || code === 'Space') {
+        event.preventDefault();
+        event.stopPropagation();
+        goToPhoto(state.current + 1);
+      }
+      if (key === 'ArrowLeft' || code === 'ArrowLeft') {
+        event.preventDefault();
+        event.stopPropagation();
+        goToPhoto(state.current - 1);
+      }
+    }
+
+    function focusApp_() {
+      if (els.app && document.activeElement !== els.app) {
+        els.app.focus({ preventScroll: true });
+      }
+    }
+
+    function goToPhoto(index) {
+      if (!state.photos.length) return;
+      const nextIndex = clamp(index, 0, state.photos.length - 1);
+      if (nextIndex === state.current) return;
+      state.current = nextIndex;
+      state.translateX = 0;
+      resetZoom();
+      setTrackPosition(false);
+      updateChrome();
+    }
+
     function onPointerDown(event) {
       event.preventDefault();
+      focusApp_();
       state.pointerMap.set(event.pointerId, { x: event.clientX, y: event.clientY });
       event.currentTarget.setPointerCapture(event.pointerId);
       if (state.pointerMap.size === 1) {
@@ -888,6 +965,7 @@
       if (state.pointerMap.size === 2) {
         state.lastDistance = touchDistance();
         state.baseScale = state.scale;
+        state.pinchStartScale = state.scale;
         state.lastCenter = touchCenter();
         state.zoomOriginX = (state.lastCenter.x / window.innerWidth) * 100;
         state.zoomOriginY = (state.lastCenter.y / window.innerHeight) * 100;
@@ -930,7 +1008,11 @@
     function onPointerUp(event) {
       state.pointerMap.delete(event.pointerId);
       if (state.openingGrid) return;
-      if (!state.grid && state.zoomDragKind === 'pinch' && state.pointerMap.size < 2 && state.scale < 0.86) {
+      if (!state.grid && state.zoomDragKind === 'pinch' && state.pointerMap.size < 2 && state.pinchStartScale > 1.02 && state.scale <= 1.02) {
+        animateZoomToFull_();
+        return;
+      }
+      if (!state.grid && state.zoomDragKind === 'pinch' && state.pointerMap.size < 2 && state.pinchStartScale <= 1.02 && state.scale < 0.86) {
         openGridFromPinch_();
         return;
       }
@@ -1016,11 +1098,12 @@
     function openGridFromPinch_() {
       if (state.openingGrid) return;
       state.openingGrid = true;
+      els.app.classList.add('grid-opening');
       const wrap = els.track.querySelector(`.slide[data-index="${state.current}"] .photo-wrap`);
       state.dragging = false;
       state.translateX = 0;
       if (wrap) {
-        wrap.style.transition = 'transform .24s cubic-bezier(.2, .8, .2, 1), opacity .2s ease';
+        wrap.style.transition = 'transform .26s cubic-bezier(.2, .8, .2, 1), opacity .22s ease';
         wrap.style.transformOrigin = `${state.zoomOriginX}% ${state.zoomOriginY}%`;
         wrap.style.transform = `translate3d(${state.panX * .25}px, ${state.panY * .25}px, 0) scale(.58)`;
         wrap.style.opacity = '0';
@@ -1028,10 +1111,38 @@
       setTimeout(() => {
         state.grid = true;
         state.openingGrid = false;
+        els.app.classList.remove('grid-opening');
         resetZoom();
         setTrackPosition(false);
         updateChrome();
-      }, 180);
+      }, 220);
+    }
+
+    function animateZoomToFull_() {
+      const wrap = els.track.querySelector(`.slide[data-index="${state.current}"] .photo-wrap`);
+      state.dragging = false;
+      state.translateX = 0;
+      state.scale = 1;
+      state.baseScale = 1;
+      state.pinchStartScale = 1;
+      state.panX = 0;
+      state.panY = 0;
+      state.lastCenter = null;
+      state.zoomDragKind = '';
+      if (!wrap) {
+        resetZoom();
+        setTrackPosition(false);
+        updateChrome();
+        return;
+      }
+      wrap.style.transition = 'transform .24s cubic-bezier(.2, .8, .2, 1)';
+      wrap.style.transformOrigin = '50% 50%';
+      wrap.style.transform = 'translate3d(0, 0, 0) scale(1)';
+      setTimeout(() => {
+        resetZoom();
+        setTrackPosition(false);
+        updateChrome();
+      }, 240);
     }
 
     function settleZoomPan_() {
@@ -1089,6 +1200,7 @@
     function resetZoom() {
       state.scale = 1;
       state.baseScale = 1;
+      state.pinchStartScale = 1;
       state.panX = 0;
       state.panY = 0;
       state.lastCenter = null;
