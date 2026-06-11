@@ -1129,12 +1129,17 @@
       applyGridPreferences_();
       els.grid.innerHTML = state.photos.map((photo, index) => `
         <button class="tile${photo.mediaType === 'video' ? ' video-tile' : ''}${photo.mediaType === 'video' && !photo.thumb ? ' no-thumb' : ''}${state.selected.has(index) ? ' selected' : ''}" data-index="${index}" aria-label="Open ${photo.mediaType === 'video' ? 'video' : 'photo'} ${index + 1}">
-          ${photo.thumb ? `<span class="thumb-frame"><img loading="lazy" data-src="${escapeAttr(photo.thumb)}" alt=""></span>` : ''}
+          ${photo.thumb ? `<span class="thumb-frame"><img loading="lazy" src="${escapeAttr(photo.thumb)}" alt=""></span>` : ''}
           ${photo.mediaType === 'video' ? videoBadge_() : ''}
           <span class="check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>
         </button>
       `).join('');
-      els.grid.querySelectorAll('img').forEach(img => img.addEventListener('load', () => {
+      els.grid.querySelectorAll('img').forEach(configureGridImage_);
+    }
+
+    function configureGridImage_(img) {
+      const apply = () => {
+        if (!img.naturalWidth || !img.naturalHeight) return;
         const frame = img.closest('.thumb-frame');
         const tile = img.closest('.tile');
         const portrait = img.naturalHeight >= img.naturalWidth;
@@ -1144,8 +1149,9 @@
           frame.classList.toggle('landscape', !portrait);
         }
         if (tile) tile.classList.add('loaded');
-      }));
-      observeGridImages();
+      };
+      img.addEventListener('load', apply, { once: true });
+      if (img.complete) apply();
     }
 
     function updateChrome() {
@@ -1794,20 +1800,27 @@
       state.grid = true;
       if (state.selected.size) state.selecting = true;
       updateChrome();
+      const wrap = els.track.querySelector(`.slide[data-index="${state.current}"] .photo-wrap`);
       state.dragging = false;
       state.translateX = 0;
+      state.translateY = 0;
       state.dragAxis = '';
-      els.track.style.transition = 'transform .26s cubic-bezier(.2, .8, .2, 1), opacity .22s ease';
-      els.track.style.transform = `translate3d(${-state.current * window.innerWidth}px, ${Math.min(window.innerHeight * .28, state.translateY + 80)}px, 0)`;
-      els.track.style.opacity = '0';
+      els.track.style.transition = 'opacity .24s ease';
+      els.track.style.transform = `translate3d(${-state.current * window.innerWidth}px, 0, 0)`;
+      els.track.style.opacity = '1';
+      if (wrap) {
+        wrap.style.transition = 'transform .32s cubic-bezier(.2, .8, .2, 1), opacity .28s ease';
+        wrap.style.transformOrigin = '50% 50%';
+        wrap.style.transform = 'translate3d(0, 72px, 0) scale(.58)';
+        wrap.style.opacity = '0';
+      }
       window.setTimeout(() => {
         state.openingGrid = false;
         els.app.classList.remove('grid-opening');
-        state.translateY = 0;
         resetZoom();
         setTrackPosition(false);
         updateChrome();
-      }, 280);
+      }, 340);
     }
 
     function animateZoomToFull_() {
