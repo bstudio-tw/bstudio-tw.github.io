@@ -777,6 +777,7 @@
       downloadAbort: null,
       downloadCanceled: false,
       gridObserver: null,
+      viewportTimer: null,
       albumLoadId: 0
     };
 
@@ -1376,6 +1377,8 @@
       document.addEventListener('dragstart', blockSaveMenu);
       document.addEventListener('selectstart', blockSaveMenu);
       window.addEventListener('keydown', handleKeyboard, true);
+      window.addEventListener('resize', handleViewportChange);
+      window.addEventListener('orientationchange', handleViewportChange);
       els.viewToggle.addEventListener('click', () => {
         focusApp_();
         if (state.modeAnimating) return;
@@ -1541,6 +1544,25 @@
         event.stopPropagation();
         goToPhoto(state.current - 1);
       }
+    }
+
+    function handleViewportChange() {
+      window.clearTimeout(state.viewportTimer);
+      state.viewportTimer = window.setTimeout(applyViewportChange_, 120);
+    }
+
+    function applyViewportChange_() {
+      state.dragging = false;
+      state.translateX = 0;
+      state.translateY = 0;
+      state.dragAxis = '';
+      state.pointerMap.clear();
+      if (state.grid) return;
+      resetZoom();
+      requestAnimationFrame(() => {
+        setTrackPosition(false);
+        updateChrome();
+      });
     }
 
     function focusApp_() {
