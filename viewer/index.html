@@ -150,6 +150,8 @@
       inset: 0;
       overflow: hidden;
       background: #000;
+      transition: transform .3s cubic-bezier(.2, .8, .2, 1), opacity .24s ease;
+      will-change: transform, opacity;
     }
 
     .blur-bg {
@@ -163,7 +165,13 @@
       transition: background-image .18s ease, opacity .18s ease;
     }
 
-    .app.grid-opening .blur-bg { opacity: 0; }
+    .app.grid-opening .blur-bg { opacity: .1; }
+    .app.viewer-slide-in .stage,
+    .app.viewer-slide-out .stage,
+    .app.viewer-zoom-in .stage { z-index: 25; }
+    .app.viewer-slide-in .stage { animation: viewerSlideIn .3s cubic-bezier(.2, .8, .2, 1) both; }
+    .app.viewer-slide-out .stage { animation: viewerSlideOut .28s cubic-bezier(.2, .8, .2, 1) both; }
+    .app.viewer-zoom-in .stage { animation: viewerZoomIn .32s cubic-bezier(.2, .8, .2, 1) both; }
 
     .track {
       position: absolute;
@@ -250,9 +258,16 @@
       background: #080808;
       padding: calc(74px + env(safe-area-inset-top)) 10px calc(96px + env(safe-area-inset-bottom));
       touch-action: pan-y;
+      opacity: 0;
+      transform: translateX(0);
+      transition: opacity .24s ease, transform .3s cubic-bezier(.2, .8, .2, 1);
+      will-change: opacity, transform;
     }
 
-    .grid-view.active { display: block; }
+    .grid-view.active { display: block; opacity: 1; }
+    .app.viewer-slide-in .grid-view.active { opacity: 1; }
+    .app.viewer-slide-out .grid-view.active { opacity: 1; }
+    .app.grid-opening .grid-view.active { animation: gridFadeIn .34s ease both .06s; }
     .grid-head {
       display: flex;
       justify-content: space-between;
@@ -264,6 +279,7 @@
     }
 
     .grid-head-actions {
+      position: relative;
       display: flex;
       align-items: center;
       gap: 8px;
@@ -286,14 +302,53 @@
       stroke-linejoin: round;
     }
 
+    .grid-options-menu {
+      position: absolute;
+      top: 42px;
+      right: 0;
+      z-index: 35;
+      display: none;
+      min-width: 210px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(20, 20, 20, .94);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, .38);
+      backdrop-filter: blur(18px);
+    }
+
+    .grid-head-actions.menu-open .grid-options-menu { display: grid; gap: 4px; }
+    .grid-options-menu button {
+      display: block;
+      width: 100%;
+      min-height: 38px;
+      padding: 9px 10px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      text-align: left;
+      white-space: normal;
+    }
+    .grid-options-menu button.active { background: rgba(240, 96, 34, .22); color: #fff; }
+
     .grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(var(--grid-columns, 3), minmax(0, 1fr));
       gap: 3px;
     }
 
     @media (min-width: 720px) {
-      .grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
+      .grid { gap: 5px; }
+    }
+
+    .grid.aspect-grid {
+      display: block;
+      column-count: var(--grid-columns, 3);
+      column-gap: 3px;
+    }
+
+    @media (min-width: 720px) {
+      .grid.aspect-grid { column-gap: 5px; }
     }
 
     .tile {
@@ -304,6 +359,22 @@
       border: 0;
       border-radius: 2px;
       padding: 0;
+    }
+
+    .grid.aspect-grid .tile {
+      display: block;
+      width: 100%;
+      aspect-ratio: auto;
+      margin: 0 0 3px;
+      break-inside: avoid;
+    }
+
+    .grid.aspect-grid .tile.video-tile.no-thumb {
+      aspect-ratio: 16 / 9;
+    }
+
+    @media (min-width: 720px) {
+      .grid.aspect-grid .tile { margin-bottom: 5px; }
     }
 
     .tile img {
@@ -317,6 +388,12 @@
       -webkit-touch-callout: none;
       -webkit-user-drag: none;
       pointer-events: none;
+    }
+
+    .grid.aspect-grid .tile img {
+      display: block;
+      height: auto;
+      object-fit: contain;
     }
 
     .tile.loaded img { opacity: 1; }
@@ -445,6 +522,47 @@
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes gridFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes viewerSlideIn {
+      from { transform: translateX(100%); opacity: .96; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes viewerSlideOut {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(100%); opacity: .96; }
+    }
+    @keyframes viewerZoomIn {
+      from { transform: translateX(10%) scale(.94); opacity: 0; }
+      to { transform: translateX(0) scale(1); opacity: 1; }
+    }
+
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 55;
+      display: none;
+      place-items: center;
+      background: #050505;
+      color: var(--text);
+    }
+
+    .loading-overlay.active { display: grid; }
+    .loading-card {
+      display: grid;
+      justify-items: center;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .loading-card .spinner {
+      width: 34px;
+      height: 34px;
+      border-width: 3px;
+    }
 
     .empty, .gate {
       position: fixed;
@@ -476,6 +594,11 @@
         <div class="grid-head-actions">
           <span id="selectedCount"></span>
           <button id="selectAllBtn" aria-label="Select all photos"></button>
+          <button id="gridOptionsToggle" aria-label="Grid options"></button>
+          <div class="grid-options-menu" id="gridOptionsMenu">
+            <button type="button" data-grid-layout="square">Square Photo Grid</button>
+            <button type="button" data-grid-layout="aspect">Aspect Ratio Grid</button>
+          </div>
         </div>
       </div>
       <div class="grid" id="grid"></div>
@@ -506,6 +629,12 @@
       <span class="status-message" id="downloadText">Preparing...</span>
       <button class="status-cancel" id="cancelDownloadBtn" aria-label="Cancel download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
+    <div class="loading-overlay active" id="loadingOverlay">
+      <div class="loading-card">
+        <span class="spinner"></span>
+        <span id="loadingText">Loading album...</span>
+      </div>
+    </div>
     <div class="empty" id="empty">No photos were found for this album.</div>
     <div class="gate" id="gate"><div><h1>Open in LINE</h1><p>This album is available through LINE only.</p></div></div>
   </main>
@@ -533,6 +662,11 @@
       photos: [],
       current: 0,
       grid: false,
+      gridColumns: 3,
+      gridLayout: 'square',
+      gridPinchStartDistance: 0,
+      gridPinchStartColumns: 3,
+      gridPinching: false,
       selecting: false,
       selected: new Set(),
       dragging: false,
@@ -551,6 +685,7 @@
       zoomOriginY: 50,
       zoomDragKind: '',
       openingGrid: false,
+      modeAnimating: false,
       tapCandidate: false,
       tapStartX: 0,
       tapStartY: 0,
@@ -561,7 +696,8 @@
       downloading: false,
       downloadAbort: null,
       downloadCanceled: false,
-      gridObserver: null
+      gridObserver: null,
+      albumLoadId: 0
     };
 
     const els = {
@@ -583,36 +719,48 @@
       gridCount: document.getElementById('gridCount'),
       selectedCount: document.getElementById('selectedCount'),
       selectAllBtn: document.getElementById('selectAllBtn'),
+      gridHeadActions: document.querySelector('.grid-head-actions'),
+      gridOptionsToggle: document.getElementById('gridOptionsToggle'),
+      gridOptionsMenu: document.getElementById('gridOptionsMenu'),
       status: document.getElementById('downloadStatus'),
       statusText: document.getElementById('downloadText'),
       cancelDownloadBtn: document.getElementById('cancelDownloadBtn'),
+      loadingOverlay: document.getElementById('loadingOverlay'),
+      loadingText: document.getElementById('loadingText'),
       empty: document.getElementById('empty'),
       gate: document.getElementById('gate')
     };
 
     init().catch(err => {
       console.error(err);
+      hideLoading();
       els.counter.textContent = 'Unable to load album';
       els.empty.textContent = err.message || 'Unable to load album.';
       els.empty.classList.add('active');
     });
 
     async function init() {
+      showLoading('Loading album...');
+      loadGridPreferences_();
       captureLaunchState();
       state.config = await loadConfig();
-      await initLiff(state.config);
       if (state.config.lineOnly && window.liff && !liff.isInClient()) {
+        hideLoading();
         els.gate.classList.add('active');
         return;
       }
+      const liffReady = initLiff(state.config);
       state.albums = state.config.albums || [];
       if (!state.albums.length) {
+        hideLoading();
         els.empty.textContent = state.config.error || 'No active albums were found for this event.';
         els.empty.classList.add('active');
+        await liffReady;
+        return;
       }
       renderAlbumMenu();
       bindEvents();
-      await loadAlbum(state.albumIndex);
+      await Promise.all([liffReady, loadAlbum(state.albumIndex)]);
       focusApp_();
     }
 
@@ -651,12 +799,16 @@
       const configUrl = sessionStorage.getItem('bstudio_config') || APP_CONFIG_URL;
       const eventId = sessionStorage.getItem('bstudio_event') || DEFAULT_EVENT_ID;
       if (!configUrl) return DEFAULT_CONFIG;
+      const cacheKey = cacheKey_('config', configUrl, eventId || '');
+      const cached = readCache_(cacheKey, 2 * 60 * 1000);
+      if (cached) return cached;
       const config = await jsonp(configUrl + (configUrl.includes('?') ? '&' : '?') + 'action=config&event=' + encodeURIComponent(eventId || ''));
       if (!config || config.ok === false) {
         return Object.assign({}, DEFAULT_CONFIG, {
           error: config && config.error ? config.error : 'Unable to load album config.'
         });
       }
+      writeCache_(cacheKey, config);
       return config;
     }
 
@@ -675,6 +827,60 @@
       });
     }
 
+    function showLoading(text) {
+      if (els.loadingText) els.loadingText.textContent = text || 'Loading album...';
+      if (els.loadingOverlay) els.loadingOverlay.classList.add('active');
+    }
+
+    function hideLoading() {
+      if (els.loadingOverlay) els.loadingOverlay.classList.remove('active');
+    }
+
+    function readAlbumPhotosCache_(album) {
+      return readCache_(albumPhotosCacheKey_(album), 10 * 60 * 1000);
+    }
+
+    function writeAlbumPhotosCache_(album, photos) {
+      writeCache_(albumPhotosCacheKey_(album), photos);
+    }
+
+    function albumPhotosCacheKey_(album) {
+      return cacheKey_(
+        'photos',
+        state.config && state.config.eventId || sessionStorage.getItem('bstudio_event') || DEFAULT_EVENT_ID || '',
+        album && (album.id || album.name || '') || '',
+        album && (album.sheetId || state.config.sheetId || '') || '',
+        album && album.sheetName || ''
+      );
+    }
+
+    function cacheKey_(type, ...parts) {
+      const raw = parts.map(part => String(part || '')).join('|');
+      let hash = 0;
+      for (let i = 0; i < raw.length; i++) hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
+      return `bstudio_viewer_${type}_${Math.abs(hash)}`;
+    }
+
+    function readCache_(key, maxAgeMs) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        const cached = JSON.parse(raw);
+        if (!cached || !cached.time || Date.now() - cached.time > maxAgeMs) return null;
+        return cached.value || null;
+      } catch (err) {
+        return null;
+      }
+    }
+
+    function writeCache_(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify({ time: Date.now(), value }));
+      } catch (err) {
+        // Storage may be unavailable or full inside some in-app browsers.
+      }
+    }
+
     function renderAlbumMenu() {
       els.albumMenu.innerHTML = state.albums.map((album, index) => `
         <button type="button" data-album-index="${index}">${escapeHtml(album.name)}</button>
@@ -688,6 +894,7 @@
     }
 
     async function loadAlbum(index) {
+      const loadId = ++state.albumLoadId;
       state.albumIndex = index;
       state.current = 0;
       state.selected.clear();
@@ -700,19 +907,38 @@
         renderTrack();
         renderGrid();
         updateChrome();
+        hideLoading();
         return;
       }
       els.albumName.textContent = album ? album.name : state.config.title;
       els.counter.textContent = 'Loading...';
       els.empty.classList.remove('active');
       els.empty.textContent = 'No photos were found for this album.';
-      try {
-        state.photos = await fetchPhotos(album);
-      } catch (err) {
-        console.error(err);
-        state.photos = [];
-        els.empty.textContent = err.message || 'Unable to load this album.';
+      showLoading('Loading album...');
+      const cachedPhotos = readAlbumPhotosCache_(album);
+      if (cachedPhotos && cachedPhotos.length) {
+        state.photos = cachedPhotos;
+        renderLoadedAlbum_();
+        hideLoading();
       }
+      try {
+        const photos = await fetchPhotos(album);
+        if (loadId !== state.albumLoadId) return;
+        state.photos = photos;
+        writeAlbumPhotosCache_(album, photos);
+      } catch (err) {
+        if (loadId !== state.albumLoadId) return;
+        console.error(err);
+        if (!cachedPhotos || !cachedPhotos.length) state.photos = [];
+        els.empty.textContent = err.message || 'Unable to load this album.';
+      } finally {
+        if (loadId === state.albumLoadId) hideLoading();
+      }
+      if (loadId !== state.albumLoadId) return;
+      renderLoadedAlbum_();
+    }
+
+    function renderLoadedAlbum_() {
       renderTrack();
       renderGrid();
       updateChrome();
@@ -793,6 +1019,7 @@
     }
 
     function renderGrid() {
+      applyGridPreferences_();
       els.grid.innerHTML = state.photos.map((photo, index) => `
         <button class="tile${photo.mediaType === 'video' ? ' video-tile' : ''}${photo.mediaType === 'video' && !photo.thumb ? ' no-thumb' : ''}${state.selected.has(index) ? ' selected' : ''}" data-index="${index}" aria-label="Open ${photo.mediaType === 'video' ? 'video' : 'photo'} ${index + 1}">
           ${photo.thumb ? `<img loading="lazy" data-src="${escapeAttr(photo.thumb)}" alt="">` : ''}
@@ -830,7 +1057,9 @@
       els.selectAllBtn.style.display = state.grid && state.selecting ? '' : 'none';
       els.selectAllBtn.innerHTML = state.selected.size === total ? clearSelectionIcon_() : selectAllIcon_();
       els.selectAllBtn.setAttribute('aria-label', state.selected.size === total ? 'Clear selection' : 'Select all photos');
+      els.gridOptionsToggle.innerHTML = optionsIcon_();
       els.gridView.classList.toggle('active', state.grid);
+      updateGridOptionsMenu_();
       updateAlbumMenuState();
       renderGridSelection();
       if (!state.grid) loadVisibleHd();
@@ -842,6 +1071,91 @@
         tile.classList.toggle('selected', selected);
         tile.classList.toggle('selecting', state.selecting);
       });
+    }
+
+    function loadGridPreferences_() {
+      try {
+        const columns = Number(localStorage.getItem('bstudio_grid_columns') || 3);
+        const layout = localStorage.getItem('bstudio_grid_layout') || 'square';
+        state.gridColumns = clamp(Number.isFinite(columns) ? columns : 3, 3, 5);
+        state.gridLayout = layout === 'aspect' ? 'aspect' : 'square';
+      } catch (err) {
+        state.gridColumns = 3;
+        state.gridLayout = 'square';
+      }
+    }
+
+    function saveGridPreferences_() {
+      try {
+        localStorage.setItem('bstudio_grid_columns', String(state.gridColumns));
+        localStorage.setItem('bstudio_grid_layout', state.gridLayout);
+      } catch (err) {
+        // Storage may be unavailable inside some in-app browsers.
+      }
+    }
+
+    function applyGridPreferences_() {
+      els.grid.style.setProperty('--grid-columns', String(state.gridColumns));
+      els.grid.classList.toggle('aspect-grid', state.gridLayout === 'aspect');
+    }
+
+    function updateGridColumns_(columns) {
+      const next = clamp(columns, 3, 5);
+      if (next === state.gridColumns) return;
+      state.gridColumns = next;
+      saveGridPreferences_();
+      applyGridPreferences_();
+    }
+
+    function updateGridLayout_(layout) {
+      state.gridLayout = layout === 'aspect' ? 'aspect' : 'square';
+      saveGridPreferences_();
+      applyGridPreferences_();
+      updateGridOptionsMenu_();
+    }
+
+    function updateGridOptionsMenu_() {
+      els.gridOptionsMenu.querySelectorAll('[data-grid-layout]').forEach(button => {
+        button.classList.toggle('active', button.dataset.gridLayout === state.gridLayout);
+      });
+    }
+
+    function animateViewerFromGrid_(kind, index) {
+      if (state.modeAnimating) return;
+      state.modeAnimating = true;
+      if (typeof index === 'number') state.current = index;
+      state.grid = false;
+      resetZoom();
+      setTrackPosition(false);
+      updateChrome();
+      els.gridView.classList.add('active');
+      els.app.classList.remove('viewer-slide-out', 'viewer-slide-in', 'viewer-zoom-in', 'grid-opening');
+      void els.app.offsetWidth;
+      els.app.classList.add(kind === 'tile' ? 'viewer-zoom-in' : 'viewer-slide-in');
+      window.setTimeout(() => {
+        els.app.classList.remove('viewer-slide-in', 'viewer-zoom-in');
+        els.gridView.classList.toggle('active', state.grid);
+        state.modeAnimating = false;
+        updateChrome();
+      }, kind === 'tile' ? 330 : 310);
+    }
+
+    function animateGridFromViewerButton_() {
+      if (state.modeAnimating) return;
+      state.modeAnimating = true;
+      if (state.selected.size) state.selecting = true;
+      state.grid = true;
+      resetZoom();
+      setTrackPosition(false);
+      updateChrome();
+      els.app.classList.remove('viewer-slide-out', 'viewer-slide-in', 'viewer-zoom-in', 'grid-opening');
+      void els.app.offsetWidth;
+      els.app.classList.add('viewer-slide-out');
+      window.setTimeout(() => {
+        els.app.classList.remove('viewer-slide-out');
+        state.modeAnimating = false;
+        updateChrome();
+      }, 300);
     }
 
     function observeGridImages() {
@@ -881,6 +1195,10 @@
       return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>';
     }
 
+    function optionsIcon_() {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true" style="fill:currentColor;stroke:none"><circle cx="12" cy="12" r="1.8"/><circle cx="5" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
+    }
+
     function selectAllIcon_() {
       return '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 3 3 5-6"/></svg>';
     }
@@ -907,6 +1225,7 @@
       });
       document.addEventListener('click', event => {
         if (!els.titleline.contains(event.target)) els.titleline.classList.remove('menu-open');
+        if (!els.gridHeadActions.contains(event.target)) els.gridHeadActions.classList.remove('menu-open');
       });
       document.addEventListener('contextmenu', blockSaveMenu);
       document.addEventListener('dragstart', blockSaveMenu);
@@ -914,9 +1233,9 @@
       window.addEventListener('keydown', handleKeyboard, true);
       els.viewToggle.addEventListener('click', () => {
         focusApp_();
-        state.grid = !state.grid;
-        if (state.grid && state.selected.size) state.selecting = true;
-        updateChrome();
+        if (state.modeAnimating) return;
+        if (state.grid) animateViewerFromGrid_('button');
+        else animateGridFromViewerButton_();
       });
       els.selectToggle.addEventListener('click', () => {
         if (!state.grid) {
@@ -940,10 +1259,21 @@
         state.selecting = !!state.selected.size;
         updateChrome();
       });
+      els.gridOptionsToggle.addEventListener('click', event => {
+        event.stopPropagation();
+        els.gridHeadActions.classList.toggle('menu-open');
+      });
+      els.gridOptionsMenu.addEventListener('click', event => {
+        const button = event.target.closest('[data-grid-layout]');
+        if (!button) return;
+        updateGridLayout_(button.dataset.gridLayout);
+        els.gridHeadActions.classList.remove('menu-open');
+      });
       els.downloadBtn.addEventListener('click', downloadRequested);
       els.cancelDownloadBtn.addEventListener('click', cancelDownload);
       els.grid.addEventListener('click', event => {
         focusApp_();
+        if (state.modeAnimating) return;
         const tile = event.target.closest('.tile');
         if (!tile) return;
         const index = Number(tile.dataset.index);
@@ -951,11 +1281,7 @@
           toggleSelected(index);
           return;
         }
-        state.current = index;
-        state.grid = false;
-        resetZoom();
-        setTrackPosition(false);
-        updateChrome();
+        animateViewerFromGrid_('tile', index);
       });
 
       const stage = document.getElementById('stage');
@@ -963,11 +1289,46 @@
       stage.addEventListener('pointermove', onPointerMove);
       stage.addEventListener('pointerup', onPointerUp);
       stage.addEventListener('pointercancel', onPointerUp);
+      els.gridView.addEventListener('touchstart', onGridTouchStart, { passive: false });
+      els.gridView.addEventListener('touchmove', onGridTouchMove, { passive: false });
+      els.gridView.addEventListener('touchend', onGridTouchEnd);
+      els.gridView.addEventListener('touchcancel', onGridTouchEnd);
     }
 
     function blockSaveMenu(event) {
-      if (event.target.closest('button, .album-menu')) return;
+      if (event.target.closest('button, .album-menu, .grid-options-menu')) return;
       event.preventDefault();
+    }
+
+    function onGridTouchStart(event) {
+      if (!state.grid || event.touches.length !== 2) return;
+      state.gridPinching = true;
+      state.gridPinchStartDistance = touchEventDistance_(event);
+      state.gridPinchStartColumns = state.gridColumns;
+      els.gridHeadActions.classList.remove('menu-open');
+    }
+
+    function onGridTouchMove(event) {
+      if (!state.gridPinching || event.touches.length !== 2) return;
+      event.preventDefault();
+      const distance = touchEventDistance_(event);
+      const delta = distance - state.gridPinchStartDistance;
+      const step = Math.round(delta / 56);
+      const nextColumns = clamp(state.gridPinchStartColumns - step, 3, 5);
+      updateGridColumns_(nextColumns);
+    }
+
+    function onGridTouchEnd(event) {
+      if (event.touches && event.touches.length >= 2) return;
+      state.gridPinching = false;
+      state.gridPinchStartDistance = 0;
+      state.gridPinchStartColumns = state.gridColumns;
+    }
+
+    function touchEventDistance_(event) {
+      const a = event.touches[0];
+      const b = event.touches[1];
+      return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
     }
 
     function handleKeyboard(event) {
@@ -1206,23 +1567,25 @@
       if (state.openingGrid) return;
       state.openingGrid = true;
       els.app.classList.add('grid-opening');
+      state.grid = true;
+      if (state.selected.size) state.selecting = true;
+      updateChrome();
       const wrap = els.track.querySelector(`.slide[data-index="${state.current}"] .photo-wrap`);
       state.dragging = false;
       state.translateX = 0;
       if (wrap) {
-        wrap.style.transition = 'transform .26s cubic-bezier(.2, .8, .2, 1), opacity .22s ease';
+        wrap.style.transition = 'transform .32s cubic-bezier(.2, .8, .2, 1), opacity .28s ease';
         wrap.style.transformOrigin = `${state.zoomOriginX}% ${state.zoomOriginY}%`;
         wrap.style.transform = `translate3d(${state.panX * .25}px, ${state.panY * .25}px, 0) scale(.58)`;
         wrap.style.opacity = '0';
       }
       setTimeout(() => {
-        state.grid = true;
         state.openingGrid = false;
         els.app.classList.remove('grid-opening');
         resetZoom();
         setTrackPosition(false);
         updateChrome();
-      }, 220);
+      }, 340);
     }
 
     function animateZoomToFull_() {
