@@ -374,6 +374,23 @@
       .grid { gap: 5px; }
     }
 
+    @media (min-width: 900px) {
+      .grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 8px;
+      }
+      .grid-view {
+        padding-left: 18px;
+        padding-right: 18px;
+      }
+    }
+
+    @media (min-width: 1280px) {
+      .grid {
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      }
+    }
+
     .grid.aspect-grid {
       display: grid;
     }
@@ -394,6 +411,8 @@
       place-items: center;
       background: #101010;
       border-radius: 5px;
+      overflow: visible;
+      padding: 4px;
     }
 
     .tile img {
@@ -415,22 +434,22 @@
       place-self: center;
       width: auto;
       height: auto;
-      max-width: calc(100% - 3px);
-      max-height: calc(100% - 3px);
+      max-width: 100%;
+      max-height: 100%;
       object-fit: contain;
       border-radius: 5px;
     }
 
     .grid.aspect-grid .tile img.portrait {
       width: auto;
-      height: calc(100% - 3px);
-      max-width: calc(100% - 3px);
+      height: 100%;
+      max-width: 100%;
     }
 
     .grid.aspect-grid .tile img.landscape {
-      width: calc(100% - 3px);
+      width: 100%;
       height: auto;
-      max-height: calc(100% - 3px);
+      max-height: 100%;
     }
 
     .grid.reflowing .tile { transform: scale(.965); }
@@ -1473,6 +1492,12 @@
           const direction = key === 'ArrowDown' || code === 'ArrowDown' ? 1 : -1;
           els.gridView.scrollBy({ top: direction * Math.max(180, window.innerHeight * .55), behavior: 'smooth' });
         }
+        return;
+      }
+      if (key === 'Escape' || code === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        animateGridFromViewerButton_();
         return;
       }
       if (key === 'ArrowRight' || code === 'ArrowRight' || key === ' ' || key === 'Spacebar' || code === 'Space') {
