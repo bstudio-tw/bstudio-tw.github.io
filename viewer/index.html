@@ -406,13 +406,12 @@
       transition: transform .22s cubic-bezier(.2, .8, .2, 1), border-radius .22s ease, background .22s ease;
     }
 
-    .grid.aspect-grid .tile {
-      display: grid;
-      place-items: center;
-      background: #101010;
-      border-radius: 5px;
-      overflow: visible;
-      padding: 4px;
+    .thumb-frame {
+      position: absolute;
+      inset: 0;
+      display: block;
+      overflow: hidden;
+      border-radius: 1.5px;
     }
 
     .tile img {
@@ -420,8 +419,7 @@
       height: 100%;
       object-fit: cover;
       opacity: .78;
-      border-radius: 1.5px;
-      transition: opacity .18s ease, transform .22s cubic-bezier(.2, .8, .2, 1), border-radius .22s ease;
+      transition: opacity .18s ease, transform .22s cubic-bezier(.2, .8, .2, 1);
       user-select: none;
       -webkit-user-select: none;
       -webkit-touch-callout: none;
@@ -429,43 +427,35 @@
       pointer-events: none;
     }
 
-    .grid.aspect-grid .tile img {
-      display: block;
-      place-self: center;
-      width: auto;
-      height: auto;
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
+    .grid.aspect-grid .tile {
+      display: grid;
+      place-items: center;
+      background: #101010;
       border-radius: 5px;
+      overflow: visible;
     }
 
-    .grid.aspect-grid .tile img.portrait {
+    .grid.aspect-grid .thumb-frame {
+      position: relative;
+      inset: auto;
+      place-self: center;
+      overflow: hidden;
+      max-width: 100%;
+      max-height: 100%;
+      border-radius: 5px;
+      aspect-ratio: var(--media-ratio, 1 / 1);
+    }
+
+    .grid.aspect-grid .thumb-frame.portrait {
       width: auto;
       height: 100%;
       max-width: 100%;
     }
 
-    .grid.aspect-grid .tile img.landscape {
+    .grid.aspect-grid .thumb-frame.landscape {
       width: 100%;
       height: auto;
       max-height: 100%;
-    }
-
-    @media (max-width: 899px) {
-      .grid.aspect-grid .tile {
-        padding: 6px;
-      }
-
-      .grid.aspect-grid .tile img.portrait {
-        height: calc(100% - 10px);
-        max-width: calc(100% - 6px);
-      }
-
-      .grid.aspect-grid .tile img.landscape {
-        width: calc(100% - 6px);
-        max-height: calc(100% - 10px);
-      }
     }
 
     .grid.reflowing .tile { transform: scale(.965); }
@@ -1139,15 +1129,21 @@
       applyGridPreferences_();
       els.grid.innerHTML = state.photos.map((photo, index) => `
         <button class="tile${photo.mediaType === 'video' ? ' video-tile' : ''}${photo.mediaType === 'video' && !photo.thumb ? ' no-thumb' : ''}${state.selected.has(index) ? ' selected' : ''}" data-index="${index}" aria-label="Open ${photo.mediaType === 'video' ? 'video' : 'photo'} ${index + 1}">
-          ${photo.thumb ? `<img loading="lazy" data-src="${escapeAttr(photo.thumb)}" alt="">` : ''}
+          ${photo.thumb ? `<span class="thumb-frame"><img loading="lazy" data-src="${escapeAttr(photo.thumb)}" alt=""></span>` : ''}
           ${photo.mediaType === 'video' ? videoBadge_() : ''}
           <span class="check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>
         </button>
       `).join('');
       els.grid.querySelectorAll('img').forEach(img => img.addEventListener('load', () => {
-        img.classList.toggle('portrait', img.naturalHeight >= img.naturalWidth);
-        img.classList.toggle('landscape', img.naturalHeight < img.naturalWidth);
-        img.parentElement.classList.add('loaded');
+        const frame = img.closest('.thumb-frame');
+        const tile = img.closest('.tile');
+        const portrait = img.naturalHeight >= img.naturalWidth;
+        if (frame) {
+          frame.style.setProperty('--media-ratio', `${img.naturalWidth} / ${img.naturalHeight}`);
+          frame.classList.toggle('portrait', portrait);
+          frame.classList.toggle('landscape', !portrait);
+        }
+        if (tile) tile.classList.add('loaded');
       }));
       observeGridImages();
     }
