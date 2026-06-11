@@ -452,6 +452,22 @@
       max-height: 100%;
     }
 
+    @media (max-width: 899px) {
+      .grid.aspect-grid .tile {
+        padding: 6px;
+      }
+
+      .grid.aspect-grid .tile img.portrait {
+        height: calc(100% - 10px);
+        max-width: calc(100% - 6px);
+      }
+
+      .grid.aspect-grid .tile img.landscape {
+        width: calc(100% - 6px);
+        max-height: calc(100% - 10px);
+      }
+    }
+
     .grid.reflowing .tile { transform: scale(.965); }
     .grid.reflowing.aspect-grid .tile img { transform: scale(.985); }
 
