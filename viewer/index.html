@@ -551,6 +551,13 @@
       zoomOriginY: 50,
       zoomDragKind: '',
       openingGrid: false,
+      tapCandidate: false,
+      tapStartX: 0,
+      tapStartY: 0,
+      tapStartTime: 0,
+      lastTapTime: 0,
+      lastTapX: 0,
+      lastTapY: 0,
       downloading: false,
       downloadAbort: null,
       downloadCanceled: false,
@@ -818,6 +825,7 @@
         : (state.selected.has(state.current) ? selectedCircleIcon_() : selectCircleIcon_());
       els.selectToggle.setAttribute('aria-label', state.grid ? 'Select photos' : 'Select current photo');
       els.downloadBtn.innerHTML = downloadIcon_();
+      els.downloadBtn.style.display = state.grid && !state.selected.size ? 'none' : '';
       els.downloadBtn.setAttribute('aria-label', state.selected.size ? `Download ${state.selected.size} selected photos` : 'Download current photo');
       els.selectAllBtn.style.display = state.grid && state.selecting ? '' : 'none';
       els.selectAllBtn.innerHTML = state.selected.size === total ? clearSelectionIcon_() : selectAllIcon_();
@@ -1017,8 +1025,13 @@
         state.lastX = event.clientX;
         state.translateX = 0;
         state.zoomDragKind = state.scale > 1 ? 'single' : '';
+        state.tapCandidate = !state.grid;
+        state.tapStartX = event.clientX;
+        state.tapStartY = event.clientY;
+        state.tapStartTime = Date.now();
       }
       if (state.pointerMap.size === 2) {
+        state.tapCandidate = false;
         state.lastDistance = touchDistance();
         state.baseScale = state.scale;
         state.pinchStartScale = state.scale;
@@ -1034,6 +1047,9 @@
       if (!state.pointerMap.has(event.pointerId)) return;
       const previous = state.pointerMap.get(event.pointerId);
       state.pointerMap.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (Math.hypot(event.clientX - state.tapStartX, event.clientY - state.tapStartY) > 10) {
+        state.tapCandidate = false;
+      }
       if (state.pointerMap.size === 2) {
         const distance = touchDistance();
         const center = touchCenter();
@@ -1062,8 +1078,14 @@
     }
 
     function onPointerUp(event) {
+      const wasTap = state.tapCandidate
+        && state.pointerMap.size === 1
+        && state.pointerMap.has(event.pointerId)
+        && Date.now() - state.tapStartTime < 360
+        && Math.hypot(event.clientX - state.tapStartX, event.clientY - state.tapStartY) <= 12;
       state.pointerMap.delete(event.pointerId);
       if (state.openingGrid) return;
+      if (!state.grid && wasTap && handleDoubleTap_(event.clientX, event.clientY)) return;
       if (!state.grid && state.zoomDragKind === 'pinch' && state.pointerMap.size < 2 && state.pinchStartScale > 1.02 && state.scale <= 1.02) {
         animateZoomToFull_();
         return;
@@ -1107,6 +1129,20 @@
       else applyZoom();
       setTrackPosition(false);
       updateChrome();
+    }
+
+    function handleDoubleTap_(x, y) {
+      const now = Date.now();
+      const closeToLastTap = now - state.lastTapTime < 330
+        && Math.hypot(x - state.lastTapX, y - state.lastTapY) < 42;
+      state.lastTapTime = now;
+      state.lastTapX = x;
+      state.lastTapY = y;
+      if (!closeToLastTap) return false;
+      state.lastTapTime = 0;
+      if (state.scale > 1.02) animateZoomToFull_();
+      else animateZoomToPoint_(x, y);
+      return true;
     }
 
     function setTrackPosition(activeDrag) {
@@ -1216,6 +1252,27 @@
       }, 240);
     }
 
+    function animateZoomToPoint_(x, y) {
+      const wrap = els.track.querySelector(`.slide[data-index="${state.current}"] .photo-wrap`);
+      if (!wrap) return;
+      state.dragging = false;
+      state.translateX = 0;
+      state.scale = 2.35;
+      state.baseScale = state.scale;
+      state.pinchStartScale = state.scale;
+      state.panX = 0;
+      state.panY = 0;
+      state.lastCenter = null;
+      state.zoomOriginX = clamp((x / window.innerWidth) * 100, 0, 100);
+      state.zoomOriginY = clamp((y / window.innerHeight) * 100, 0, 100);
+      state.zoomDragKind = '';
+      wrap.style.transition = 'transform .24s cubic-bezier(.2, .8, .2, 1)';
+      wrap.style.transformOrigin = `${state.zoomOriginX}% ${state.zoomOriginY}%`;
+      wrap.style.transform = `translate3d(0, 0, 0) scale(${state.scale})`;
+      setTrackPosition(false);
+      updateChrome();
+    }
+
     function settleZoomPan_() {
       const bounds = zoomBounds_();
       const threshold = Math.min(120, window.innerWidth * .24);
@@ -1278,6 +1335,7 @@
       state.zoomOriginX = 50;
       state.zoomOriginY = 50;
       state.zoomDragKind = '';
+      state.tapCandidate = false;
       els.track.querySelectorAll('.photo-wrap').forEach(wrap => {
         wrap.style.transform = '';
         wrap.style.transformOrigin = '';
@@ -1312,6 +1370,7 @@
         showStatus('Please wait for the current download to finish.');
         return;
       }
+      if (state.grid && !state.selected.size) return;
       const indexes = state.selected.size ? Array.from(state.selected) : [state.current];
       if (!indexes.length || !state.photos.length) return;
       state.downloading = true;
