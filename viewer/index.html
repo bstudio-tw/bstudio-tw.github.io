@@ -415,10 +415,22 @@
       place-self: center;
       width: auto;
       height: auto;
-      max-width: calc(100% - 2px);
-      max-height: calc(100% - 2px);
+      max-width: calc(100% - 3px);
+      max-height: calc(100% - 3px);
       object-fit: contain;
       border-radius: 5px;
+    }
+
+    .grid.aspect-grid .tile img.portrait {
+      width: auto;
+      height: calc(100% - 3px);
+      max-width: calc(100% - 3px);
+    }
+
+    .grid.aspect-grid .tile img.landscape {
+      width: calc(100% - 3px);
+      height: auto;
+      max-height: calc(100% - 3px);
     }
 
     .grid.reflowing .tile { transform: scale(.965); }
@@ -1097,7 +1109,11 @@
           <span class="check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>
         </button>
       `).join('');
-      els.grid.querySelectorAll('img').forEach(img => img.addEventListener('load', () => img.parentElement.classList.add('loaded')));
+      els.grid.querySelectorAll('img').forEach(img => img.addEventListener('load', () => {
+        img.classList.toggle('portrait', img.naturalHeight >= img.naturalWidth);
+        img.classList.toggle('landscape', img.naturalHeight < img.naturalWidth);
+        img.parentElement.classList.add('loaded');
+      }));
       observeGridImages();
     }
 
