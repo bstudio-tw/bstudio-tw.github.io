@@ -268,6 +268,38 @@
     .app.viewer-slide-in .grid-view.active { opacity: 1; }
     .app.viewer-slide-out .grid-view.active { opacity: 1; }
     .app.grid-opening .grid-view.active { animation: gridFadeIn .34s ease both .06s; }
+    .pull-refresh {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      display: grid;
+      place-items: center;
+      height: 0;
+      overflow: visible;
+      color: var(--muted);
+      font-size: 12px;
+      pointer-events: none;
+      transform: translateY(-18px);
+      opacity: 0;
+      transition: opacity .18s ease, transform .18s ease;
+    }
+    .pull-refresh.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .pull-refresh-card {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      padding: 7px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(18, 18, 18, .78);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .24);
+    }
+    .pull-refresh-card .spinner { width: 14px; height: 14px; }
     .grid-head {
       display: flex;
       justify-content: space-between;
@@ -335,6 +367,7 @@
       display: grid;
       grid-template-columns: repeat(var(--grid-columns, 3), minmax(0, 1fr));
       gap: 3px;
+      transition: gap .22s ease;
     }
 
     @media (min-width: 720px) {
@@ -342,13 +375,7 @@
     }
 
     .grid.aspect-grid {
-      display: block;
-      column-count: var(--grid-columns, 3);
-      column-gap: 3px;
-    }
-
-    @media (min-width: 720px) {
-      .grid.aspect-grid { column-gap: 5px; }
+      display: grid;
     }
 
     .tile {
@@ -359,22 +386,14 @@
       border: 0;
       border-radius: 2px;
       padding: 0;
+      transition: transform .22s cubic-bezier(.2, .8, .2, 1), border-radius .22s ease, background .22s ease;
     }
 
     .grid.aspect-grid .tile {
-      display: block;
-      width: 100%;
-      aspect-ratio: auto;
-      margin: 0 0 3px;
-      break-inside: avoid;
-    }
-
-    .grid.aspect-grid .tile.video-tile.no-thumb {
-      aspect-ratio: 16 / 9;
-    }
-
-    @media (min-width: 720px) {
-      .grid.aspect-grid .tile { margin-bottom: 5px; }
+      display: grid;
+      place-items: center;
+      background: #101010;
+      border-radius: 5px;
     }
 
     .tile img {
@@ -382,7 +401,8 @@
       height: 100%;
       object-fit: cover;
       opacity: .78;
-      transition: opacity .18s ease, transform .18s ease;
+      border-radius: 1.5px;
+      transition: opacity .18s ease, transform .22s cubic-bezier(.2, .8, .2, 1), border-radius .22s ease;
       user-select: none;
       -webkit-user-select: none;
       -webkit-touch-callout: none;
@@ -391,10 +411,14 @@
     }
 
     .grid.aspect-grid .tile img {
-      display: block;
-      height: auto;
+      width: 100%;
+      height: 100%;
       object-fit: contain;
+      border-radius: 5px;
     }
+
+    .grid.reflowing .tile { transform: scale(.965); }
+    .grid.reflowing.aspect-grid .tile img { transform: scale(.985); }
 
     .tile.loaded img { opacity: 1; }
     .tile.video-tile {
@@ -589,6 +613,12 @@
     </section>
 
     <section class="grid-view" id="gridView">
+      <div class="pull-refresh" id="pullRefresh">
+        <div class="pull-refresh-card">
+          <span class="spinner"></span>
+          <span id="pullRefreshText">Pull to refresh</span>
+        </div>
+      </div>
       <div class="grid-head">
         <span id="gridCount">0 photos</span>
         <div class="grid-head-actions">
@@ -667,12 +697,20 @@
       gridPinchStartDistance: 0,
       gridPinchStartColumns: 3,
       gridPinching: false,
+      gridPulling: false,
+      gridPullStartY: 0,
+      gridPullDistance: 0,
+      refreshing: false,
       selecting: false,
       selected: new Set(),
       dragging: false,
       startX: 0,
+      startY: 0,
       lastX: 0,
+      lastY: 0,
       translateX: 0,
+      translateY: 0,
+      dragAxis: '',
       pointerMap: new Map(),
       scale: 1,
       baseScale: 1,
@@ -722,6 +760,8 @@
       gridHeadActions: document.querySelector('.grid-head-actions'),
       gridOptionsToggle: document.getElementById('gridOptionsToggle'),
       gridOptionsMenu: document.getElementById('gridOptionsMenu'),
+      pullRefresh: document.getElementById('pullRefresh'),
+      pullRefreshText: document.getElementById('pullRefreshText'),
       status: document.getElementById('downloadStatus'),
       statusText: document.getElementById('downloadText'),
       cancelDownloadBtn: document.getElementById('cancelDownloadBtn'),
@@ -893,7 +933,7 @@
       updateAlbumMenuState();
     }
 
-    async function loadAlbum(index) {
+    async function loadAlbum(index, options = {}) {
       const loadId = ++state.albumLoadId;
       state.albumIndex = index;
       state.current = 0;
@@ -915,7 +955,7 @@
       els.empty.classList.remove('active');
       els.empty.textContent = 'No photos were found for this album.';
       showLoading('Loading album...');
-      const cachedPhotos = readAlbumPhotosCache_(album);
+      const cachedPhotos = options.forceRefresh ? null : readAlbumPhotosCache_(album);
       if (cachedPhotos && cachedPhotos.length) {
         state.photos = cachedPhotos;
         renderLoadedAlbum_();
@@ -936,6 +976,32 @@
       }
       if (loadId !== state.albumLoadId) return;
       renderLoadedAlbum_();
+    }
+
+    async function refreshCurrentAlbum_() {
+      if (state.refreshing) return;
+      const album = state.albums[state.albumIndex];
+      if (!album) return;
+      state.refreshing = true;
+      updatePullRefresh_(84, 'Refreshing...');
+      try {
+        const photos = await fetchPhotos(album);
+        state.photos = photos;
+        state.current = clamp(state.current, 0, Math.max(0, photos.length - 1));
+        writeAlbumPhotosCache_(album, photos);
+        renderLoadedAlbum_();
+        updatePullRefresh_(84, 'Updated');
+      } catch (err) {
+        console.error(err);
+        updatePullRefresh_(84, 'Refresh failed');
+      } finally {
+        window.setTimeout(() => {
+          state.refreshing = false;
+          state.gridPulling = false;
+          state.gridPullDistance = 0;
+          updatePullRefresh_(0, 'Pull to refresh');
+        }, 520);
+      }
     }
 
     function renderLoadedAlbum_() {
@@ -1105,6 +1171,7 @@
       state.gridColumns = next;
       saveGridPreferences_();
       applyGridPreferences_();
+      pulseGridReflow_();
     }
 
     function updateGridLayout_(layout) {
@@ -1112,12 +1179,21 @@
       saveGridPreferences_();
       applyGridPreferences_();
       updateGridOptionsMenu_();
+      pulseGridReflow_();
     }
 
     function updateGridOptionsMenu_() {
       els.gridOptionsMenu.querySelectorAll('[data-grid-layout]').forEach(button => {
         button.classList.toggle('active', button.dataset.gridLayout === state.gridLayout);
       });
+    }
+
+    function pulseGridReflow_() {
+      if (!els.grid) return;
+      els.grid.classList.remove('reflowing');
+      void els.grid.offsetWidth;
+      els.grid.classList.add('reflowing');
+      window.setTimeout(() => els.grid.classList.remove('reflowing'), 180);
     }
 
     function animateViewerFromGrid_(kind, index) {
@@ -1301,7 +1377,15 @@
     }
 
     function onGridTouchStart(event) {
-      if (!state.grid || event.touches.length !== 2) return;
+      if (!state.grid) return;
+      if (event.touches.length === 1 && els.gridView.scrollTop <= 0 && !state.refreshing) {
+        state.gridPulling = true;
+        state.gridPullStartY = event.touches[0].clientY;
+        state.gridPullDistance = 0;
+        return;
+      }
+      if (event.touches.length !== 2) return;
+      state.gridPulling = false;
       state.gridPinching = true;
       state.gridPinchStartDistance = touchEventDistance_(event);
       state.gridPinchStartColumns = state.gridColumns;
@@ -1309,6 +1393,14 @@
     }
 
     function onGridTouchMove(event) {
+      if (state.gridPulling && event.touches.length === 1) {
+        const distance = Math.max(0, event.touches[0].clientY - state.gridPullStartY);
+        if (distance <= 0) return;
+        event.preventDefault();
+        state.gridPullDistance = Math.min(96, distance * .55);
+        updatePullRefresh_(state.gridPullDistance, state.gridPullDistance >= 64 ? 'Release to refresh' : 'Pull to refresh');
+        return;
+      }
       if (!state.gridPinching || event.touches.length !== 2) return;
       event.preventDefault();
       const distance = touchEventDistance_(event);
@@ -1320,9 +1412,26 @@
 
     function onGridTouchEnd(event) {
       if (event.touches && event.touches.length >= 2) return;
+      if (state.gridPulling) {
+        const shouldRefresh = state.gridPullDistance >= 64;
+        state.gridPulling = false;
+        if (shouldRefresh) refreshCurrentAlbum_();
+        else {
+          state.gridPullDistance = 0;
+          updatePullRefresh_(0, 'Pull to refresh');
+        }
+      }
       state.gridPinching = false;
       state.gridPinchStartDistance = 0;
       state.gridPinchStartColumns = state.gridColumns;
+    }
+
+    function updatePullRefresh_(distance, text) {
+      if (!els.pullRefresh) return;
+      const active = distance > 0 || state.refreshing;
+      els.pullRefresh.classList.toggle('active', active);
+      els.pullRefresh.style.transform = active ? `translateY(${Math.max(0, distance)}px)` : '';
+      if (els.pullRefreshText) els.pullRefreshText.textContent = text || 'Pull to refresh';
     }
 
     function touchEventDistance_(event) {
@@ -1383,8 +1492,12 @@
       if (state.pointerMap.size === 1) {
         state.dragging = true;
         state.startX = event.clientX;
+        state.startY = event.clientY;
         state.lastX = event.clientX;
+        state.lastY = event.clientY;
         state.translateX = 0;
+        state.translateY = 0;
+        state.dragAxis = '';
         state.zoomDragKind = state.scale > 1 ? 'single' : '';
         state.tapCandidate = !state.grid;
         state.tapStartX = event.clientX;
@@ -1427,6 +1540,7 @@
       }
       if (!state.dragging || state.grid) return;
       const dx = event.clientX - state.startX;
+      const dy = event.clientY - state.startY;
       if (state.scale > 1) {
         state.panX += event.clientX - previous.x;
         state.panY += event.clientY - previous.y;
@@ -1434,7 +1548,18 @@
         applyZoom();
         return;
       }
+      if (!state.dragAxis) {
+        if (dy > 12 && dy > Math.abs(dx) * 1.15) state.dragAxis = 'vertical';
+        else if (Math.abs(dx) > 10) state.dragAxis = 'horizontal';
+      }
+      if (state.dragAxis === 'vertical') {
+        state.translateX = 0;
+        state.translateY = rubberBand_(Math.max(0, dy), window.innerHeight * .42);
+        setTrackPosition(true);
+        return;
+      }
       state.translateX = dx;
+      state.translateY = 0;
       setTrackPosition(true);
     }
 
@@ -1475,6 +1600,19 @@
         settleZoomPan_();
         return;
       }
+      if (state.dragAxis === 'vertical') {
+        if (state.translateY > Math.min(150, window.innerHeight * .18)) {
+          openGridFromPullDown_();
+          return;
+        }
+        state.dragging = false;
+        state.translateX = 0;
+        state.translateY = 0;
+        state.dragAxis = '';
+        setTrackPosition(false);
+        updateChrome();
+        return;
+      }
       const threshold = Math.min(110, window.innerWidth * .22);
       let changedPhoto = false;
       if (state.scale === 1 && Math.abs(state.translateX) > threshold) {
@@ -1486,6 +1624,8 @@
       }
       state.dragging = false;
       state.translateX = 0;
+      state.translateY = 0;
+      state.dragAxis = '';
       if (changedPhoto || state.scale <= 1.02) resetZoom();
       else applyZoom();
       setTrackPosition(false);
@@ -1507,9 +1647,11 @@
     }
 
     function setTrackPosition(activeDrag) {
-      els.track.style.transition = activeDrag ? 'none' : 'transform .28s cubic-bezier(.2, .8, .2, 1)';
+      els.track.style.transition = activeDrag ? 'none' : 'transform .28s cubic-bezier(.2, .8, .2, 1), opacity .22s ease';
       const x = -state.current * window.innerWidth + state.translateX;
-      els.track.style.transform = `translate3d(${x}px, 0, 0)`;
+      const y = state.translateY || 0;
+      els.track.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+      els.track.style.opacity = y > 0 ? String(clamp(1 - y / (window.innerHeight * .62), .52, 1)) : '';
     }
 
     function loadVisibleHd() {
@@ -1586,6 +1728,29 @@
         setTrackPosition(false);
         updateChrome();
       }, 340);
+    }
+
+    function openGridFromPullDown_() {
+      if (state.openingGrid) return;
+      state.openingGrid = true;
+      els.app.classList.add('grid-opening');
+      state.grid = true;
+      if (state.selected.size) state.selecting = true;
+      updateChrome();
+      state.dragging = false;
+      state.translateX = 0;
+      state.dragAxis = '';
+      els.track.style.transition = 'transform .26s cubic-bezier(.2, .8, .2, 1), opacity .22s ease';
+      els.track.style.transform = `translate3d(${-state.current * window.innerWidth}px, ${Math.min(window.innerHeight * .28, state.translateY + 80)}px, 0)`;
+      els.track.style.opacity = '0';
+      window.setTimeout(() => {
+        state.openingGrid = false;
+        els.app.classList.remove('grid-opening');
+        state.translateY = 0;
+        resetZoom();
+        setTrackPosition(false);
+        updateChrome();
+      }, 280);
     }
 
     function animateZoomToFull_() {
@@ -1698,6 +1863,9 @@
       state.zoomOriginX = 50;
       state.zoomOriginY = 50;
       state.zoomDragKind = '';
+      state.translateY = 0;
+      state.dragAxis = '';
+      els.track.style.opacity = '';
       state.tapCandidate = false;
       els.track.querySelectorAll('.photo-wrap').forEach(wrap => {
         wrap.style.transform = '';
