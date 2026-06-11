@@ -1129,7 +1129,7 @@
       applyGridPreferences_();
       els.grid.innerHTML = state.photos.map((photo, index) => `
         <button class="tile${photo.mediaType === 'video' ? ' video-tile' : ''}${photo.mediaType === 'video' && !photo.thumb ? ' no-thumb' : ''}${state.selected.has(index) ? ' selected' : ''}" data-index="${index}" aria-label="Open ${photo.mediaType === 'video' ? 'video' : 'photo'} ${index + 1}">
-          ${photo.thumb ? `<span class="thumb-frame"><img loading="lazy" src="${escapeAttr(photo.thumb)}" alt=""></span>` : ''}
+          ${photo.thumb ? `<span class="thumb-frame"><img src="${escapeAttr(photo.thumb)}" alt=""></span>` : ''}
           ${photo.mediaType === 'video' ? videoBadge_() : ''}
           <span class="check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>
         </button>
@@ -1138,20 +1138,24 @@
     }
 
     function configureGridImage_(img) {
-      const apply = () => {
-        if (!img.naturalWidth || !img.naturalHeight) return;
-        const frame = img.closest('.thumb-frame');
-        const tile = img.closest('.tile');
-        const portrait = img.naturalHeight >= img.naturalWidth;
-        if (frame) {
-          frame.style.setProperty('--media-ratio', `${img.naturalWidth} / ${img.naturalHeight}`);
-          frame.classList.toggle('portrait', portrait);
-          frame.classList.toggle('landscape', !portrait);
-        }
-        if (tile) tile.classList.add('loaded');
-      };
-      img.addEventListener('load', apply, { once: true });
-      if (img.complete) apply();
+      if (!img.dataset.boundRatio) {
+        img.dataset.boundRatio = '1';
+        img.addEventListener('load', () => applyGridImageRatio_(img), { once: true });
+      }
+      if (img.complete) applyGridImageRatio_(img);
+    }
+
+    function applyGridImageRatio_(img) {
+      if (!img.naturalWidth || !img.naturalHeight) return;
+      const frame = img.closest('.thumb-frame');
+      const tile = img.closest('.tile');
+      const portrait = img.naturalHeight >= img.naturalWidth;
+      if (frame) {
+        frame.style.setProperty('--media-ratio', `${img.naturalWidth} / ${img.naturalHeight}`);
+        frame.classList.toggle('portrait', portrait);
+        frame.classList.toggle('landscape', !portrait);
+      }
+      if (tile) tile.classList.add('loaded');
     }
 
     function updateChrome() {
@@ -1220,6 +1224,7 @@
     function applyGridPreferences_() {
       els.grid.style.setProperty('--grid-columns', String(state.gridColumns));
       els.grid.classList.toggle('aspect-grid', state.gridLayout === 'aspect');
+      if (state.gridLayout === 'aspect') requestAnimationFrame(refreshGridImageRatios_);
     }
 
     function updateGridColumns_(columns) {
@@ -1251,6 +1256,12 @@
       void els.grid.offsetWidth;
       els.grid.classList.add('reflowing');
       window.setTimeout(() => els.grid.classList.remove('reflowing'), 180);
+    }
+
+    function refreshGridImageRatios_() {
+      els.grid.querySelectorAll('img').forEach(img => {
+        if (img.complete && img.naturalWidth && img.naturalHeight) applyGridImageRatio_(img);
+      });
     }
 
     function animateViewerFromGrid_(kind, index) {
