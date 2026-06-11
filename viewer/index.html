@@ -1549,8 +1549,8 @@
         return;
       }
       if (!state.dragAxis) {
-        if (dy > 12 && dy > Math.abs(dx) * 1.15) state.dragAxis = 'vertical';
-        else if (Math.abs(dx) > 10) state.dragAxis = 'horizontal';
+        if (dy > 4 && dy > Math.abs(dx) * .7) state.dragAxis = 'vertical';
+        else if (Math.abs(dx) > 14 && Math.abs(dx) > dy * 1.2) state.dragAxis = 'horizontal';
       }
       if (state.dragAxis === 'vertical') {
         state.translateX = 0;
@@ -1601,7 +1601,7 @@
         return;
       }
       if (state.dragAxis === 'vertical') {
-        if (state.translateY > Math.min(150, window.innerHeight * .18)) {
+        if (state.translateY > 18) {
           openGridFromPullDown_();
           return;
         }
