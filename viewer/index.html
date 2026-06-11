@@ -300,6 +300,7 @@
       box-shadow: 0 10px 30px rgba(0, 0, 0, .24);
     }
     .pull-refresh-card .spinner { width: 14px; height: 14px; }
+    .pull-refresh:not(.refreshing) .spinner { display: none; }
     .grid-head {
       display: flex;
       justify-content: space-between;
@@ -1498,6 +1499,7 @@
       if (!els.pullRefresh) return;
       const active = distance > 0 || state.refreshing;
       els.pullRefresh.classList.toggle('active', active);
+      els.pullRefresh.classList.toggle('refreshing', state.refreshing && text === 'Refreshing...');
       els.pullRefresh.style.transform = active ? `translateY(${Math.max(0, distance)}px)` : '';
       if (els.pullRefreshText) els.pullRefreshText.textContent = text || 'Pull to refresh';
     }
