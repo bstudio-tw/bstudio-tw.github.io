@@ -559,6 +559,17 @@
       flex: 1 1 auto;
       min-width: 0;
     }
+    .download-status .manual-open {
+      width: auto;
+      min-width: 92px;
+      min-height: 30px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border-color: var(--orange);
+      background: var(--orange);
+      color: #fff;
+      font-size: 12px;
+    }
     .status-cancel {
       width: 28px;
       min-width: 28px;
@@ -791,6 +802,7 @@
       downloadCanceled: false,
       externalDownload: null,
       externalDownloadStarted: false,
+      liffReady: null,
       gridObserver: null,
       viewportTimer: null,
       albumLoadId: 0
@@ -841,6 +853,7 @@
       showLoading('Loading album...');
       loadGridPreferences_();
       captureLaunchState();
+      state.liffReady = initLiffSilently_();
       state.config = await loadConfig();
       if (state.config.lineOnly && !state.externalDownload && !isLineInAppBrowser_()) {
         hideLoading();
@@ -876,7 +889,7 @@
         };
         els.app.classList.add('download-only');
       }
-      if (location.search) history.replaceState({}, document.title, location.origin + location.pathname);
+      // Keep the LIFF query/state intact. Removing it before liff.init can make LINE reload the app.
     }
 
     function mergeLiffStateParams(params) {
@@ -889,6 +902,20 @@
         if (!merged.get(key)) merged.set(key, value);
       });
       return merged;
+    }
+
+    async function initLiffSilently_() {
+      if (!isLineInAppBrowser_() || state.externalDownload || !window.liff) return false;
+      const liffId = sessionStorage.getItem('bstudio_liffId') || DEFAULT_LIFF_ID;
+      if (!liffId) return false;
+      try {
+        await liff.init({ liffId });
+        liff._bstudioReady = true;
+        return true;
+      } catch (err) {
+        console.error(err);
+        return false;
+      }
     }
 
     async function loadConfig() {
@@ -2067,17 +2094,38 @@
       return isLineInAppBrowser_();
     }
 
-    function openZipDownloadInExternalBrowser_(indexes) {
+    async function openZipDownloadInExternalBrowser_(indexes) {
       showStatus('Opening browser for ZIP download...');
       const url = buildExternalDownloadUrl_(indexes);
-      if (isLineInAppBrowser_()) {
-        window.location.href = url;
+      if (isLineInAppBrowser_() && window.liff) {
+        const ready = state.liffReady ? await state.liffReady : false;
+        if (ready && liff.openWindow) {
+          liff.openWindow({ url, external: true });
+        } else {
+          showExternalDownloadFallback_(url);
+        }
       } else {
         window.open(url, '_blank', 'noopener');
       }
       setTimeout(() => {
-        if (!state.downloading) hideStatus();
+        if (!state.downloading && !els.status.dataset.manualUrl) hideStatus();
       }, 1600);
+    }
+
+    function showExternalDownloadFallback_(url) {
+      showStatus('Tap Open Browser to continue downloading.');
+      els.status.dataset.manualUrl = url;
+      if (!els.status.querySelector('.manual-open')) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'manual-open';
+        button.textContent = 'Open Browser';
+        button.addEventListener('click', () => {
+          const target = els.status.dataset.manualUrl;
+          if (target) window.open(target, '_blank', 'noopener');
+        });
+        els.status.appendChild(button);
+      }
     }
 
     function isLineInAppBrowser_() {
@@ -2216,6 +2264,9 @@
     }
 
     function hideStatus() {
+      delete els.status.dataset.manualUrl;
+      const manualOpen = els.status.querySelector('.manual-open');
+      if (manualOpen) manualOpen.remove();
       els.status.classList.remove('active');
     }
 
