@@ -555,6 +555,7 @@
     }
 
     .download-status.active { transform: translate(-50%, 0); opacity: 1; }
+    .download-status.done .spinner { display: none; }
     .download-status .status-message {
       flex: 1 1 auto;
       min-width: 0;
@@ -2209,11 +2210,11 @@
     }
 
     function scheduleExternalDownloadClose_() {
-      showStatus('Download started. Closing this page...');
+      showDoneStatus_('Download started. Closing this page...');
       window.setTimeout(() => {
         window.close();
         window.setTimeout(() => {
-          showStatus('Download started. You can close this page.');
+          showDoneStatus_('Download started. You can close this page.');
         }, 700);
       }, 900);
     }
@@ -2251,14 +2252,21 @@
     }
 
     function showStatus(text) {
+      els.status.classList.remove('done');
       els.statusText.textContent = text;
       els.status.classList.add('active');
+    }
+
+    function showDoneStatus_(text) {
+      els.statusText.textContent = text;
+      els.status.classList.add('active', 'done');
     }
 
     function hideStatus() {
       delete els.status.dataset.manualUrl;
       const manualOpen = els.status.querySelector('.manual-open');
       if (manualOpen) manualOpen.remove();
+      els.status.classList.remove('done');
       els.status.classList.remove('active');
     }
 
