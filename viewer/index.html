@@ -645,6 +645,18 @@
     .empty.active, .gate.active { display: grid; }
     .gate h1 { color: var(--text); font-size: 22px; margin: 0 0 8px; }
     .gate p { margin: 0; line-height: 1.5; }
+    .app.download-only .stage,
+    .app.download-only .grid-view,
+    .app.download-only .topbar,
+    .app.download-only .caption,
+    .app.download-only .empty,
+    .app.download-only .gate {
+      display: none !important;
+    }
+
+    .app.download-only {
+      background: #050505;
+    }
   </style>
 </head>
 <body>
@@ -864,6 +876,7 @@
           type: 'zip',
           indexes: launchParams.get('indexes') || ''
         };
+        els.app.classList.add('download-only');
       }
       if (location.search) history.replaceState({}, document.title, location.origin + location.pathname);
     }
@@ -881,6 +894,7 @@
     }
 
     async function initLiff(config) {
+      if (state.externalDownload) return;
       const liffId = sessionStorage.getItem('bstudio_liffId') || config.liffId || DEFAULT_LIFF_ID;
       if (!liffId || !window.liff || (!isLineInAppBrowser_() && !config.lineOnly)) return;
       await liff.init({ liffId });
@@ -1057,6 +1071,10 @@
     }
 
     function renderLoadedAlbum_() {
+      if (state.externalDownload) {
+        startExternalDownloadIfNeeded_();
+        return;
+      }
       renderTrack();
       renderGrid();
       updateChrome();
@@ -2100,6 +2118,7 @@
     function startExternalDownloadIfNeeded_() {
       if (!state.externalDownload || state.externalDownloadStarted || !state.photos.length) return;
       state.externalDownloadStarted = true;
+      hideLoading();
       const indexes = decodeIndexRanges_(state.externalDownload.indexes)
         .filter(index => index >= 0 && index < state.photos.length);
       if (!indexes.length) {
@@ -2108,9 +2127,7 @@
         return;
       }
       state.selected = new Set(indexes);
-      state.grid = true;
-      els.gridView.classList.add('active');
-      updateChrome();
+      showStatus('Preparing ZIP download...');
       setTimeout(downloadRequested, 350);
     }
 
