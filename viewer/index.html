@@ -2104,6 +2104,9 @@
         link.textContent = 'Download';
         link.target = '_blank';
         link.rel = 'noopener';
+        link.addEventListener('click', () => {
+          setTimeout(hideStatus, 80);
+        });
         els.status.appendChild(link);
       }
       const link = els.status.querySelector('.manual-open');
