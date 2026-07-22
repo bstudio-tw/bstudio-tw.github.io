@@ -2118,12 +2118,12 @@
     }
 
     function showExternalDownloadFallback_(url) {
-      showStatus('Tap Open Browser to continue downloading.');
+      showStatus('Tap Download to continue downloading.');
       els.status.dataset.manualUrl = url;
       if (!els.status.querySelector('.manual-open')) {
         const link = document.createElement('a');
         link.className = 'manual-open';
-        link.textContent = 'Open Browser';
+        link.textContent = 'Download';
         link.target = '_blank';
         link.rel = 'noopener';
         els.status.appendChild(link);
