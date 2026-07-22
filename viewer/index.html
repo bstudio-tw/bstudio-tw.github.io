@@ -739,8 +739,8 @@
 
   <script>
     const APP_CONFIG_URL = 'https://script.google.com/macros/s/AKfycbzeWg98DT87-Cal2tYvmrBtCMr0dDQU8dczin9_0-luy1PFb0VVZZfAtlpeSbNUQnlEFg/exec';
+    const APP_VIEWER_URL = 'https://bstudio-tw.github.io/viewer/index.html';
     const DEFAULT_EVENT_ID = '';
-    const DEFAULT_LIFF_ID = '2010350573-KBbtq9FW';
 
     const DEFAULT_CONFIG = {
       eventId: '',
@@ -805,7 +805,6 @@
       downloadCanceled: false,
       externalDownload: null,
       externalDownloadStarted: false,
-      liffReady: null,
       gridObserver: null,
       viewportTimer: null,
       albumLoadId: 0
@@ -856,7 +855,6 @@
       showLoading('Loading album...');
       loadGridPreferences_();
       captureLaunchState();
-      state.liffReady = initLiffSilently_();
       state.config = await loadConfig();
       if (state.config.lineOnly && !state.externalDownload && !isLineInAppBrowser_()) {
         hideLoading();
@@ -892,7 +890,7 @@
         };
         els.app.classList.add('download-only');
       }
-      // Keep the LIFF query/state intact. Removing it before liff.init can make LINE reload the app.
+      if (location.search && !state.externalDownload) history.replaceState({}, document.title, location.origin + location.pathname);
     }
 
     function mergeLiffStateParams(params) {
@@ -905,20 +903,6 @@
         if (!merged.get(key)) merged.set(key, value);
       });
       return merged;
-    }
-
-    async function initLiffSilently_() {
-      if (!isLineInAppBrowser_() || state.externalDownload || !window.liff) return false;
-      const liffId = sessionStorage.getItem('bstudio_liffId') || DEFAULT_LIFF_ID;
-      if (!liffId) return false;
-      try {
-        await liff.init({ liffId });
-        liff._bstudioReady = true;
-        return true;
-      } catch (err) {
-        console.error(err);
-        return false;
-      }
     }
 
     async function loadConfig() {
@@ -2131,7 +2115,7 @@
     }
 
     function buildExternalDownloadUrl_(indexes) {
-      const url = new URL(location.origin + location.pathname);
+      const url = new URL(APP_VIEWER_URL);
       const configUrl = sessionStorage.getItem('bstudio_config') || APP_CONFIG_URL;
       const eventId = sessionStorage.getItem('bstudio_event') || state.config.eventId || DEFAULT_EVENT_ID || '';
       const album = state.albums[state.albumIndex] || {};
