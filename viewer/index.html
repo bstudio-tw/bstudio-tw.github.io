@@ -898,7 +898,6 @@
       const liffId = sessionStorage.getItem('bstudio_liffId') || config.liffId || DEFAULT_LIFF_ID;
       if (!liffId || !window.liff || (!isLineInAppBrowser_() && !config.lineOnly)) return;
       await liff.init({ liffId });
-      if (config.lineOnly && !liff.isLoggedIn()) liff.login();
     }
 
     async function loadConfig() {
