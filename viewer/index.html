@@ -842,23 +842,21 @@
       loadGridPreferences_();
       captureLaunchState();
       state.config = await loadConfig();
-      if (state.config.lineOnly && !state.externalDownload && window.liff && !liff.isInClient()) {
+      if (state.config.lineOnly && !state.externalDownload && !isLineInAppBrowser_()) {
         hideLoading();
         els.gate.classList.add('active');
         return;
       }
-      const liffReady = initLiff(state.config);
       state.albums = state.config.albums || [];
       if (!state.albums.length) {
         hideLoading();
         els.empty.textContent = state.config.error || 'No active albums were found for this event.';
         els.empty.classList.add('active');
-        await liffReady;
         return;
       }
       renderAlbumMenu();
       bindEvents();
-      await Promise.all([liffReady, loadAlbum(state.albumIndex)]);
+      await loadAlbum(state.albumIndex);
       focusApp_();
     }
 
@@ -891,13 +889,6 @@
         if (!merged.get(key)) merged.set(key, value);
       });
       return merged;
-    }
-
-    async function initLiff(config) {
-      if (state.externalDownload) return;
-      const liffId = sessionStorage.getItem('bstudio_liffId') || config.liffId || DEFAULT_LIFF_ID;
-      if (!liffId || !window.liff || (!isLineInAppBrowser_() && !config.lineOnly)) return;
-      await liff.init({ liffId });
     }
 
     async function loadConfig() {
@@ -2037,7 +2028,7 @@
       const indexes = state.selected.size ? Array.from(state.selected) : [state.current];
       if (!indexes.length || !state.photos.length) return;
       if (indexes.length > 1 && shouldMoveZipDownloadToExternalBrowser_()) {
-        openZipDownloadInExternalBrowser_(indexes);
+        await openZipDownloadInExternalBrowser_(indexes);
         return;
       }
       state.downloading = true;
@@ -2076,10 +2067,11 @@
       return isLineInAppBrowser_() || (window.liff && liff.isInClient && liff.isInClient());
     }
 
-    function openZipDownloadInExternalBrowser_(indexes) {
+    async function openZipDownloadInExternalBrowser_(indexes) {
       showStatus('Opening browser for ZIP download...');
       const url = buildExternalDownloadUrl_(indexes);
       try {
+        await initLiffForExternalOpen_();
         if (window.liff && liff.openWindow) {
           liff.openWindow({ url, external: true });
         } else {
@@ -2092,6 +2084,14 @@
       setTimeout(() => {
         if (!state.downloading) hideStatus();
       }, 1600);
+    }
+
+    async function initLiffForExternalOpen_() {
+      if (!isLineInAppBrowser_() || !window.liff || liff._bstudioReady) return;
+      const liffId = sessionStorage.getItem('bstudio_liffId') || state.config.liffId || DEFAULT_LIFF_ID;
+      if (!liffId) return;
+      await liff.init({ liffId });
+      liff._bstudioReady = true;
     }
 
     function isLineInAppBrowser_() {
