@@ -776,6 +776,8 @@
       downloading: false,
       downloadAbort: null,
       downloadCanceled: false,
+      externalDownload: null,
+      externalDownloadStarted: false,
       gridObserver: null,
       viewportTimer: null,
       albumLoadId: 0
@@ -827,7 +829,7 @@
       loadGridPreferences_();
       captureLaunchState();
       state.config = await loadConfig();
-      if (state.config.lineOnly && window.liff && !liff.isInClient()) {
+      if (state.config.lineOnly && !state.externalDownload && window.liff && !liff.isInClient()) {
         hideLoading();
         els.gate.classList.add('active');
         return;
@@ -856,6 +858,12 @@
       ['event', 'album', 'config', 'liffId'].forEach(key => {
         if (launchParams.get(key)) sessionStorage.setItem('bstudio_' + key, launchParams.get(key));
       });
+      if (launchParams.get('download') === 'zip') {
+        state.externalDownload = {
+          type: 'zip',
+          indexes: launchParams.get('indexes') || ''
+        };
+      }
       if (location.search) history.replaceState({}, document.title, location.origin + location.pathname);
     }
 
@@ -1051,6 +1059,7 @@
       renderTrack();
       renderGrid();
       updateChrome();
+      startExternalDownloadIfNeeded_();
     }
 
     async function fetchPhotos(album) {
@@ -2009,6 +2018,10 @@
       if (state.grid && !state.selected.size) return;
       const indexes = state.selected.size ? Array.from(state.selected) : [state.current];
       if (!indexes.length || !state.photos.length) return;
+      if (indexes.length > 1 && shouldMoveZipDownloadToExternalBrowser_()) {
+        openZipDownloadInExternalBrowser_(indexes);
+        return;
+      }
       state.downloading = true;
       state.downloadCanceled = false;
       state.downloadAbort = new AbortController();
@@ -2039,6 +2052,88 @@
           state.downloadCanceled = false;
         }, 1000);
       }
+    }
+
+    function shouldMoveZipDownloadToExternalBrowser_() {
+      return window.liff && liff.isInClient && liff.isInClient();
+    }
+
+    function openZipDownloadInExternalBrowser_(indexes) {
+      showStatus('Opening browser for ZIP download...');
+      const url = buildExternalDownloadUrl_(indexes);
+      if (window.liff && liff.openWindow) {
+        liff.openWindow({ url, external: true });
+      } else {
+        window.open(url, '_blank', 'noopener');
+      }
+      setTimeout(() => {
+        if (!state.downloading) hideStatus();
+      }, 1600);
+    }
+
+    function buildExternalDownloadUrl_(indexes) {
+      const url = new URL(location.origin + location.pathname);
+      const configUrl = sessionStorage.getItem('bstudio_config') || APP_CONFIG_URL;
+      const eventId = sessionStorage.getItem('bstudio_event') || state.config.eventId || DEFAULT_EVENT_ID || '';
+      const album = state.albums[state.albumIndex] || {};
+      const albumId = album.id || album.sheetName || sessionStorage.getItem('bstudio_album') || '';
+      const liffId = sessionStorage.getItem('bstudio_liffId') || state.config.liffId || '';
+      if (configUrl) url.searchParams.set('config', configUrl);
+      if (eventId) url.searchParams.set('event', eventId);
+      if (albumId) url.searchParams.set('album', albumId);
+      if (liffId) url.searchParams.set('liffId', liffId);
+      url.searchParams.set('download', 'zip');
+      url.searchParams.set('indexes', encodeIndexRanges_(indexes));
+      return url.toString();
+    }
+
+    function startExternalDownloadIfNeeded_() {
+      if (!state.externalDownload || state.externalDownloadStarted || !state.photos.length) return;
+      state.externalDownloadStarted = true;
+      const indexes = decodeIndexRanges_(state.externalDownload.indexes)
+        .filter(index => index >= 0 && index < state.photos.length);
+      if (!indexes.length) {
+        showStatus('No selected photos were found for download.');
+        setTimeout(hideStatus, 2200);
+        return;
+      }
+      state.selected = new Set(indexes);
+      state.grid = true;
+      els.gridView.classList.add('active');
+      updateChrome();
+      setTimeout(downloadRequested, 350);
+    }
+
+    function encodeIndexRanges_(indexes) {
+      const sorted = Array.from(new Set(indexes)).sort((a, b) => a - b);
+      const ranges = [];
+      for (let i = 0; i < sorted.length; i++) {
+        const start = sorted[i];
+        let end = start;
+        while (i + 1 < sorted.length && sorted[i + 1] === end + 1) {
+          end = sorted[++i];
+        }
+        ranges.push(start === end ? String(start) : `${start}-${end}`);
+      }
+      return ranges.join(',');
+    }
+
+    function decodeIndexRanges_(value) {
+      const indexes = [];
+      String(value || '').split(',').forEach(part => {
+        const text = part.trim();
+        if (!text) return;
+        const range = text.split('-').map(number => Number(number));
+        if (range.length === 2 && Number.isFinite(range[0]) && Number.isFinite(range[1])) {
+          const start = Math.max(0, Math.min(range[0], range[1]));
+          const end = Math.max(range[0], range[1]);
+          for (let i = start; i <= end; i++) indexes.push(i);
+          return;
+        }
+        const index = Number(text);
+        if (Number.isFinite(index)) indexes.push(index);
+      });
+      return Array.from(new Set(indexes));
     }
 
     async function downloadZip(indexes, signal) {
