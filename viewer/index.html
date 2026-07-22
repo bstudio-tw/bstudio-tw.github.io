@@ -2101,13 +2101,6 @@
       const url = buildExternalDownloadUrl_(indexes);
       if (isLineInAppBrowser_()) {
         showExternalDownloadFallback_(url);
-        if (window.liff && liff._bstudioReady && liff.openWindow) {
-          try {
-            liff.openWindow({ url, external: true });
-          } catch (err) {
-            console.error(err);
-          }
-        }
       } else {
         showStatus('Opening browser for ZIP download...');
         window.open(url, '_blank', 'noopener');
@@ -2118,7 +2111,8 @@
     }
 
     function showExternalDownloadFallback_(url) {
-      showStatus('Tap Download to continue downloading.');
+      els.app.classList.remove('download-only');
+      showStatus('Tap Download to continue.');
       els.status.dataset.manualUrl = url;
       if (!els.status.querySelector('.manual-open')) {
         const link = document.createElement('a');
