@@ -2119,15 +2119,11 @@
 
     function buildExternalDownloadUrl_(indexes) {
       const url = new URL(APP_VIEWER_URL);
-      const configUrl = sessionStorage.getItem('bstudio_config') || APP_CONFIG_URL;
       const eventId = sessionStorage.getItem('bstudio_event') || state.config.eventId || DEFAULT_EVENT_ID || '';
       const album = state.albums[state.albumIndex] || {};
       const albumId = album.id || album.sheetName || sessionStorage.getItem('bstudio_album') || '';
-      const liffId = sessionStorage.getItem('bstudio_liffId') || state.config.liffId || '';
-      if (configUrl) url.searchParams.set('config', configUrl);
       if (eventId) url.searchParams.set('event', eventId);
       if (albumId) url.searchParams.set('album', albumId);
-      if (liffId) url.searchParams.set('liffId', liffId);
       url.searchParams.set('download', 'zip');
       url.searchParams.set('indexes', encodeIndexRanges_(indexes));
       url.searchParams.set('openExternalBrowser', '1');
