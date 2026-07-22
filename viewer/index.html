@@ -2058,6 +2058,7 @@
         } else {
           await downloadZip(indexes, state.downloadAbort.signal);
         }
+        if (state.externalDownload) scheduleExternalDownloadClose_();
         if (!state.downloadCanceled) setTimeout(hideStatus, 1200);
       } catch (err) {
         if (state.downloadCanceled || err.name === 'AbortError') {
@@ -2205,6 +2206,16 @@
       downloadUrl(url, `${safeName(state.config.title || 'bstudio-album')}.zip`);
       setTimeout(() => URL.revokeObjectURL(url), 120000);
       showStatus('Downloading ZIP...');
+    }
+
+    function scheduleExternalDownloadClose_() {
+      showStatus('Download started. Closing this page...');
+      window.setTimeout(() => {
+        window.close();
+        window.setTimeout(() => {
+          showStatus('Download started. You can close this page.');
+        }, 700);
+      }, 900);
     }
 
     function cancelDownload() {
