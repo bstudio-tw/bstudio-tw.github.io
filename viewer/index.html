@@ -714,6 +714,7 @@
   <script>
     const APP_CONFIG_URL = 'https://script.google.com/macros/s/AKfycbzeWg98DT87-Cal2tYvmrBtCMr0dDQU8dczin9_0-luy1PFb0VVZZfAtlpeSbNUQnlEFg/exec';
     const DEFAULT_EVENT_ID = '';
+    const DEFAULT_LIFF_ID = '2010350573-KBbtq9FW';
 
     const DEFAULT_CONFIG = {
       eventId: '',
@@ -880,10 +881,10 @@
     }
 
     async function initLiff(config) {
-      const liffId = sessionStorage.getItem('bstudio_liffId') || config.liffId || '';
-      if (!liffId || !window.liff) return;
+      const liffId = sessionStorage.getItem('bstudio_liffId') || config.liffId || DEFAULT_LIFF_ID;
+      if (!liffId || !window.liff || (!isLineInAppBrowser_() && !config.lineOnly)) return;
       await liff.init({ liffId });
-      if (!liff.isLoggedIn()) liff.login();
+      if (config.lineOnly && !liff.isLoggedIn()) liff.login();
     }
 
     async function loadConfig() {
@@ -2055,20 +2056,29 @@
     }
 
     function shouldMoveZipDownloadToExternalBrowser_() {
-      return window.liff && liff.isInClient && liff.isInClient();
+      return isLineInAppBrowser_() || (window.liff && liff.isInClient && liff.isInClient());
     }
 
     function openZipDownloadInExternalBrowser_(indexes) {
       showStatus('Opening browser for ZIP download...');
       const url = buildExternalDownloadUrl_(indexes);
-      if (window.liff && liff.openWindow) {
-        liff.openWindow({ url, external: true });
-      } else {
+      try {
+        if (window.liff && liff.openWindow) {
+          liff.openWindow({ url, external: true });
+        } else {
+          window.open(url, '_blank', 'noopener');
+        }
+      } catch (err) {
+        console.error(err);
         window.open(url, '_blank', 'noopener');
       }
       setTimeout(() => {
         if (!state.downloading) hideStatus();
       }, 1600);
+    }
+
+    function isLineInAppBrowser_() {
+      return /\bLine\//i.test(navigator.userAgent || '');
     }
 
     function buildExternalDownloadUrl_(indexes) {
