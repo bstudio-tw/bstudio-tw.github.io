@@ -560,6 +560,8 @@
       min-width: 0;
     }
     .download-status .manual-open {
+      display: inline-grid;
+      place-items: center;
       width: auto;
       min-width: 92px;
       min-height: 30px;
@@ -569,6 +571,7 @@
       background: var(--orange);
       color: #fff;
       font-size: 12px;
+      text-decoration: none;
     }
     .status-cancel {
       width: 28px;
@@ -2055,7 +2058,7 @@
       const indexes = state.selected.size ? Array.from(state.selected) : [state.current];
       if (!indexes.length || !state.photos.length) return;
       if (indexes.length > 1 && shouldMoveZipDownloadToExternalBrowser_()) {
-        await openZipDownloadInExternalBrowser_(indexes);
+        openZipDownloadInExternalBrowser_(indexes);
         return;
       }
       state.downloading = true;
@@ -2094,17 +2097,19 @@
       return isLineInAppBrowser_();
     }
 
-    async function openZipDownloadInExternalBrowser_(indexes) {
-      showStatus('Opening browser for ZIP download...');
+    function openZipDownloadInExternalBrowser_(indexes) {
       const url = buildExternalDownloadUrl_(indexes);
-      if (isLineInAppBrowser_() && window.liff) {
-        const ready = state.liffReady ? await state.liffReady : false;
-        if (ready && liff.openWindow) {
-          liff.openWindow({ url, external: true });
-        } else {
-          showExternalDownloadFallback_(url);
+      if (isLineInAppBrowser_()) {
+        showExternalDownloadFallback_(url);
+        if (window.liff && liff._bstudioReady && liff.openWindow) {
+          try {
+            liff.openWindow({ url, external: true });
+          } catch (err) {
+            console.error(err);
+          }
         }
       } else {
+        showStatus('Opening browser for ZIP download...');
         window.open(url, '_blank', 'noopener');
       }
       setTimeout(() => {
@@ -2116,16 +2121,15 @@
       showStatus('Tap Open Browser to continue downloading.');
       els.status.dataset.manualUrl = url;
       if (!els.status.querySelector('.manual-open')) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'manual-open';
-        button.textContent = 'Open Browser';
-        button.addEventListener('click', () => {
-          const target = els.status.dataset.manualUrl;
-          if (target) window.open(target, '_blank', 'noopener');
-        });
-        els.status.appendChild(button);
+        const link = document.createElement('a');
+        link.className = 'manual-open';
+        link.textContent = 'Open Browser';
+        link.target = '_blank';
+        link.rel = 'noopener';
+        els.status.appendChild(link);
       }
+      const link = els.status.querySelector('.manual-open');
+      if (link) link.href = url;
     }
 
     function isLineInAppBrowser_() {
